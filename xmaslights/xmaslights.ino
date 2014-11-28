@@ -85,6 +85,7 @@ void loop() {
   delay(5000);
   */
   
+ /* 
  chase();
  stripSet(0,0);
  delay(5000);
@@ -100,16 +101,80 @@ void loop() {
  twinkleRand(5,Color(255,255,255),Color(0, 0, 0),190);
  stripSet(0,0);
  delay(5000);
+*/
+ //twinkleRandColor(3,Color(255,255,255),Color(0, 0, 0),500);
+ //stripSet(0,0);
+ //delay(5000);
 
- twinkleRandColor(20,Color(255,255,255),Color(0, 0, 0),190);
- stripSet(0,0);
- delay(5000);
+ //simpleWave(0.1,5,10);
+ //stripSet(0,0);
+ //delay(5000);
 
- simpleWave(0.1,5,10);
- stripSet(0,0);
- delay(5000);
+//topToBottom();
 
-topToBottom();
+ fillup();
+}
+
+
+void fillup()
+{
+  int lastpos = strip.numPixels() -1;
+  int x, currentpos = 0;
+  stripSet(0,0);
+  for(x = 0; x < strip.numPixels(); x++)
+  {
+    for (int y = 0; y < lastpos; y++)
+    {
+      strip.setPixelColor(y-1, 0,0,0);
+      strip.setPixelColor(y, 30,30,0);
+      strip.show();
+//      delay(1);
+    }
+    lastpos -= 1;
+  }
+}
+int shift = 0;
+void alternate()
+{
+  stripSet(0,0);
+  for(int x = 0; x < strip.numPixels(); x++)
+  {
+    if (x+shift%2 == 0)
+    {
+      strip.setPixelColor(x, 100,0,0);
+    }
+    else
+    {
+      strip.setPixelColor(x, 0,100,0);
+    }
+  }
+  shift= shift+1;
+  shift = shift % 2;
+}
+
+
+void fill()
+{
+  int pos = 0;
+//  stripSet(0,0);
+  for (pos = 0; pos < strip.numPixels(); pos++)
+    { 
+      strip.setPixelColor(pos, 30,30,80);
+      strip.show();
+      delay(10);
+    }
+    for (pos = 0; pos < strip.numPixels(); pos++)
+    { 
+      strip.setPixelColor(pos, 80,30,30);
+      strip.show();
+      delay(10);
+    }
+    for (pos = 0; pos < strip.numPixels(); pos++)
+    { 
+      strip.setPixelColor(pos, 30, 80,30);
+      strip.show();
+      delay(10);
+    }
 }
 
 void topToBottom(){
@@ -119,9 +184,16 @@ void topToBottom(){
   for (pos = 0; pos < strip.numPixels(); pos++)
   { stripSet(0,0);
     strip.setPixelColor(pos, 255,0,0);
+    strip.setPixelColor(pos+1, 0,255,0);
+    strip.setPixelColor(pos+2, 0,0,255);
+    
+    
     strip.setPixelColor(finish-pos, 0,255,0);
+    strip.setPixelColor(finish-pos-1, 255,0,0);
+    strip.setPixelColor(finish-pos-2, 0,0,255);
+
     strip.show();
-    delay(100);
+    delay(10);
   }
 }
 
@@ -252,9 +324,9 @@ void simpleWave(float rate,int cycles, int wait) {
       pos = pos+rate;
       for(int i=0; i<strip.numPixels(); i++) {
         // sine wave, 3 offset waves make a rainbow!
-        float level = sin(i+pos) * 127 + 128;
+        float level = (sin(i+pos) * 127) + 128;
         // set color level 
-        strip.setPixelColor(i,0,(int)level,int(level));
+        strip.setPixelColor(i,(int)level, 0, 0);
       }
          strip.show();
          delay(wait);

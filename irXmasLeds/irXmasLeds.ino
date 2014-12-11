@@ -47,8 +47,8 @@ Adafruit_WS2801 strip = Adafruit_WS2801(50, dataPin, clockPin);
 
 long funcNum;
 voidFuncPtr functions[] = {/*fillup, fill, chase, theaterChase, theaterChaseRainbow, */
-                          //rainbowCycle,
-                          slow,
+                          rainbowCycle,
+                          //slow,
                           simpleWaveRed,
                           simpleWaveGreen,
                           simpleWaveBlue,

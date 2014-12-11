@@ -122,7 +122,7 @@ void chase(){
 }
 
 void slow(){
-  stripSet(0,0);
+//  stripSet(0,0);
   for (int i = 0; i < strip.numPixels(); i++)
   {
     stripSet(0,0);

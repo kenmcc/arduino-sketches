@@ -139,7 +139,7 @@ void rainbowCycle(){
   rainbowCycle(20);
 }
 void rainbowCycle(uint8_t wait) {
-  stripSet(0,0);
+  //stripSet(0,0);
 
   int i, j;
   for (j=0; j < 256 * 1; j++) { // 5 cycles of all 25 colors in the wheel

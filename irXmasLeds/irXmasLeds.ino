@@ -130,6 +130,8 @@ void loop()
       if (funcNum < 0)
         funcNum = sizeof(functions)/sizeof(functions[0]) -1;
       runningFunc = functions[funcNum];
+              stripSet(0,0);
+
     }
     else if(IRcompare(numberpulses, FORWARD,sizeof(FORWARD)/4)) {
       //runningFunc = theaterChase;
@@ -137,6 +139,8 @@ void loop()
       if (funcNum >= sizeof(functions)/sizeof(functions[0]))
         funcNum = 0;
       runningFunc = functions[funcNum];
+              stripSet(0,0);
+
     }
 
     else{
@@ -160,7 +164,7 @@ void loop()
   {
     runningFunc();
   }
-  delay(1);
+  //delay(1);
 }
 
 

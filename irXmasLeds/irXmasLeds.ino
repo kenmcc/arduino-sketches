@@ -67,9 +67,9 @@ void setup(void) {
   Serial.begin(9600);
   Serial.println("Ready to decode IR!");
   
-  pinMode(4, INPUT);     //set the pin to input
-  digitalWrite(4, LOW); //use the internal pullup resistor
-  PCintPort::attachInterrupt(4, burpcount,RISING); // attach a PinChange Interrupt to our pin on the rising edge
+  //pinMode(4, INPUT);     //set the pin to input
+  //digitalWrite(4, LOW); //use the internal pullup resistor
+  //PCintPort::attachInterrupt(4, burpcount,RISING); // attach a PinChange Interrupt to our pin on the rising edge
 
   pinMode(13, OUTPUT);  
   
@@ -78,10 +78,17 @@ void setup(void) {
   strip.show();
   randomSeed(analogRead(4));
   funcNum = random(sizeof(functions)/sizeof(functions[0]));
+  
+  pinMode(5, INPUT);     //set the pin to input
+  digitalWrite(5, HIGH); //use the internal pullup resistor
+  PCintPort::attachInterrupt(5, buttonburp,RISING); // attach a PinChange Interrupt to our pin on the rising edge
 
 }
+
+
 int numberpulses = 0;
 boolean IRPT = false;
+boolean BUTTON = false;
 void burpcount()
 {
   //Serial.println("burp");
@@ -89,15 +96,45 @@ void burpcount()
   IRPT = true;
 }
 
+void buttonburp() {    // Interrupt service routine. Every single PCINT8..14 (=ADC0..5) change
+            // will generate an interrupt: but this will always be the same interrupt routine
+//  cli();
+  delay(100);
+  Serial.println("Burp");
+  IRPT = true;
+  BUTTON = true;
+ // sei();
+}
+
+
 voidFuncPtr runningFunc = functions[funcNum];
 boolean running = true;
 void loop()
 {
-  
-  if (numberpulses > 0)
+  if (BUTTON ==true)
+  {
+        funcNum += 1;
+        if (funcNum >= sizeof(functions)/sizeof(functions[0]))
+        {
+          Serial.println("Off");
+           funcNum = -1;
+           running = false;
+           stripSet(0,0);
+        }
+        else
+        {
+          Serial.print("Function : ");
+          Serial.println(funcNum);
+          running = true;
+          runningFunc = functions[funcNum];
+        }
+        stripSet(0,0);
+  }
+  else if (numberpulses > 0)
   {
     stripSet(0,0);
-    if (IRcompare(numberpulses, STANDBY,sizeof(STANDBY)/4)) {
+    if (IRcompare(numberpulses, STANDBY,sizeof(STANDBY)/4)) 
+    {
       if (running )
       {
         Serial.println("OFF");
@@ -142,7 +179,6 @@ void loop()
               stripSet(0,0);
 
     }
-
     else{
       Serial.println("int IRsignal[] = {");
       Serial.println("// ON, OFF (in 10's of microseconds)");
@@ -159,6 +195,7 @@ void loop()
     }
     numberpulses = 0;
     IRPT = false;
+    BUTTON=false;
   }
   if(running)
   {

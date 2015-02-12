@@ -27,9 +27,22 @@
 // EOC is not used, it signifies an end of conversion
 // XCLR is a reset pin, also not used here
 
-//#include <JeeLib.h>
+#include <JeeLib.h>
 #include <Wire.h>
 //#include <Adafruit_BMP085.h>
+
+#define myNodeID 9        // RF12 node ID in the range 1-30
+#define network 99       // RF12 Network group
+#define freq RF12_433MHZ  // Frequency of RFM12B module
+
+typedef struct {
+  	  int temp;	// Temperature reading
+  	  int supplyV;	// Supply voltage
+    	  long int pres;	// Pressure reading
+          long int humidity;
+ } Payload;
+
+ Payload tinytx;
 
 #define PIN_433 2  // AIO1 = 433 MHz receiver
 
@@ -252,6 +265,12 @@ void setup()
     Serial.println();
     Serial.println("WH1080 Serial node with BMP085");
   
+  rf12_initialize(myNodeID,freq,network); // Initialize RFM12 with settings defined above 
+  rf12_control(0xC623);
+  rf12_sleep(0);                          // Put the RFM12 to sleep
+  
+  
+  
      pinMode(2, INPUT);  // use
   attachInterrupt (0, rupt, CHANGE);
   
@@ -394,6 +413,9 @@ void loop()
                     Serial.print("Temperature: ");
                     Serial.println(get_temperature_formatted());
                     //Serial.println("--------------");
+                    
+                    rfwrite(); // Send data via RF 
+
                   }
             
                 if(valid_crc())

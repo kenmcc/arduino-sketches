@@ -30,38 +30,86 @@
 #include <JeeLib.h>
 //#include <Wire.h>
 //#include <Adafruit_BMP085.h>
-#include <avr/io.h>
-#include <avr/sleep.h>    // Sleep Modes
-#include <avr/power.h>    // Power management
 
 #if defined(__AVR_ATtiny84__)
 #define PIN_433 10
 #else
 #define PIN_433 2  // AIO1 = 433 MHz receiver
 #endif
-volatile int pulse_433;
-volatile word pulse_length;
+volatile int pulse_433 = 0;
+volatile word pulse_length = 0;
 volatile unsigned long old = 0, packet_count = 0; 
 volatile unsigned long spacing, average_interval;
-word last_433; // never accessed outside ISR's
+word last_433 = 0; // never accessed outside ISR's
 volatile word pulse_count = 0; //
 byte packet[10];
 byte state = 0;
 bool packet_acquired = false;
 char *direction_name[] = {"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"};
 int __debug = 1; // set to enable debug mode
-int __bmp_fitted = 0;  // set to enable BMP085
-//Adafruit_BMP085 bmp;
 
-#ifndef cbi
-#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
-#endif
-#ifndef sbi
-#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
-#endif
+ typedef struct {
+  	  int temp;	// Temperature reading
+  	  int batt;
+          int humidity;	// Supply voltage
+          int wind_avg;
+          int wind_gust;
+          int wind_dir;
+          int rain;
+          
+ } Payload;
 
+ Payload tinytx;
+ 
+ 
+ static void rfwrite(){
+  #ifdef USE_ACK
+   for (byte i = 0; i <= RETRY_LIMIT; ++i) {  // tx and wait for ack up to RETRY_LIMIT times
+     rf12_sleep(-1);              // Wake up RF module
+      while (!rf12_canSend())
+      rf12_recvDone();
+      rf12_sendStart(RF12_HDR_ACK, &tinytx, sizeof tinytx); 
+      rf12_sendWait(2);           // Wait for RF to finish sending while in standby mode
+      byte acked = waitForAck();  // Wait for ACK
+      rf12_sleep(0);              // Put RF module to sleep
+      if (acked) { return; }      // Return if ACK received
+  
+   Sleepy::loseSomeTime(RETRY_PERIOD * 1000);     // If no ack received wait and try again
+   }
+  #else
+     rf12_sleep(-1);              // Wake up RF module
+     while (!rf12_canSend())
+     rf12_recvDone();
+     Serial.write("sendStart\n");
+     rf12_sendStart(0, &tinytx, sizeof tinytx); 
+     rf12_sendWait(2);           // Wait for RF to finish sending while in standby mode
+     rf12_sleep(0);              // Put RF module to sleep
+     return;
+  #endif
+ }
+
+ long readVcc() {
+   bitClear(PRR, PRADC); ADCSRA |= bit(ADEN); // Enable the ADC
+   long result;
+   // Read 1.1V reference against Vcc
+   #if defined(__AVR_ATtiny84__) 
+    ADMUX = _BV(MUX5) | _BV(MUX0); // For ATtiny84
+   #else
+    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);  // For ATmega328
+   #endif 
+   delay(2); // Wait for Vref to settle
+   ADCSRA |= _BV(ADSC); // Convert
+   while (bit_is_set(ADCSRA,ADSC));
+   result = ADCL;
+   result |= ADCH<<8;
+   result = 1126400L / result; // Back-calculate Vcc in mV
+   ADCSRA &= ~ bit(ADEN); bitSet(PRR, PRADC); // Disable the ADC to save power
+   return result;
+} 
+
+#if 1
 // State to track pulse durations measured in the interrupt code
-ISR(PCINT3_vect)
+ISR(PCINT0_vect)
   {
     pulse_433 = 0;
     if (digitalRead(PIN_433) == LOW) {
@@ -76,23 +124,35 @@ ISR(PCINT3_vect)
       
     }
   }
+#endif
+
+#define myNodeID 8        // RF12 node ID in the range 1-30
+#define network 99       // RF12 Network group
+#define freq RF12_433MHZ  // Frequency of RFM12B module
 
 void setup()
   {
     Serial.begin(115200);
-    Serial.println("WH1080 Serial node with BMP085");
-  
+    Serial.println("WH1080");
   
     pinMode(PIN_433, INPUT);
     digitalWrite(PIN_433, 1);   // pull-up
-    //Serial.println("Just before rf12_init_OOK()");
-    rf12_init_OOK();//set up RF12
-    Serial.println("RFM12B set up for 433MHz OOK");
+    
+  rf12_initialize(myNodeID,freq,network); // Initialize RFM12 with settings defined above 
+  rf12_control(0xC623);
+  rf12_sleep(0);                          // Put the RFM12 to sleep
+
+//    Serial.println("Just before rf12_init_OOK()");
+    //rf12_init_OOK();//set up RF12
+//    Serial.println("RFM12B set up for 433MHz OOK");
     if (__debug) {Serial.println("Debug mode");}
     // interrupt on pin change
+cli();
 #if defined(__AVR_ATtiny84__)
-//    bitSet(PCMSK1, PIN_433);
-//    bitSet(GIMSK, PCIE0);
+
+  PCMSK0 = 0b00000001;     // PCINT1 and PCINT2  (pin 12 and 11)
+  GIFR   = 0b00000000;     // clear any outstanding interrupts
+  GIMSK  = 0b00010000;     // enable pin change interrupts PCIE0=1
   pinMode(8, OUTPUT);
   digitalWrite(8, 1);
 
@@ -100,34 +160,14 @@ void setup()
     bitSet(PCMSK2, PIN_433);
     bitSet(PCICR, PCIE2);
 #endif    
-    /*if(__bmp_fitted){
-      if (!bmp.begin()) {
-          Serial.println("Could not find a valid BMP085 sensor, check wiring!");
-          __bmp_fitted = 0;
-          Serial.print("BMP085 sensor status ");
-          Serial.println(__bmp_fitted);
-        }
-      else
-        {
-          Serial.println("BMP085 sensor set up");
-        }
-      }
-    else
-      {
-        Serial.println("BMP085 sensor disabled");
-      }
-    */
-    // enable interrupts
     sei();
-    //Serial.println("Interrupts set up");
-    
+    Serial.println("Interrupts set up");
   }
 
 void loop()
   {
     byte i;
     unsigned long now;
-    //byte *packet;
   
     if (pulse_433)
       {
@@ -135,9 +175,8 @@ void loop()
         word pulse = pulse_433;
         pulse_433 = 0;
         sei();//re-enable interrupts
-        //if (__debug) {Serial.println(pulse);}
-        //Serial.println(pulse); //remove comment to see raw timings
         extractData(pulse);//extract data from pulse stream
+#if 1
       
         if (state == 3)//pulse stream complete
           {
@@ -145,42 +184,11 @@ void loop()
             now = millis();
             spacing = ((now - old)/1000);
             old = now;
-           /* 
-            if (spacing < 500)
-              {
-                Serial.println();
-                Serial.println("Too Soon!!!");
-              }
-            */
             if (spacing >= 10) // was 500
               { 
                 packet_count ++;
                 average_interval = now / packet_count;  
-              
-                if (__debug)
-                  {
-                    /*if (__bmp_fitted == 1){
-                      Serial.print("Internal Temperature = ");
-                      Serial.print(bmp.readTemperature());
-                      Serial.println(" *C");
-    
-                      Serial.print("Air Pressure = ");
-                      Serial.print(bmp.readPressure());
-                      Serial.println(" Pa");
-    
-                      // Calculate altitude assuming 'standard' barometric
-                      // pressure of 1013.25 millibar = 101325 Pascal
-                      Serial.print("Calculated Altitude = ");
-                      Serial.print(bmp.readAltitude());
-                      Serial.println(" meters");
-                    }*/
-                    Serial.print("Packet count: ");
-                    Serial.println(packet_count, DEC);
-                    Serial.print("Spacing: ");
-                    Serial.println(spacing, DEC);
-                    Serial.print("Average spacing: ");
-                    Serial.println(average_interval, DEC);
-     
+
                     Serial.println("Packet Datastream: ");
                     Serial.println("ab cd ef gh ij kl mn op qr st");
                     for(i=0;i<=9;i++)
@@ -189,78 +197,34 @@ void loop()
                         Serial.print(packet[i], HEX);
                         Serial.print(" ");
                       }
-              
-                    Serial.print("crc: ");
-                    Serial.print(calculate_crc(), HEX);
-                    Serial.println((valid_crc() ? " GOOD" : " BAD"));
+                      Serial.println("");
   
-                    Serial.print("Sensor ID: 0x");
-                    Serial.println(get_sensor_id(), HEX);
-
-                    Serial.print("Humidity: ");
-                    Serial.print(get_humidity(), DEC);
-                    Serial.println("%");
-      
-                    Serial.print("Average wind speed: ");
-                    Serial.print(get_avg_wind(), DEC);
-                    Serial.println("m/s");
-      
-                    Serial.print("Wind gust speed: ");
-                    Serial.print(get_gust_wind(), DEC);
-                    Serial.println("m/s");
-      
-                    Serial.print("Wind direction: ");
-                    //get_wind_direction();
-                    Serial.println(direction_name[get_wind_direction()]);
-            
-                    Serial.print("Rainfall: ");
-                    Serial.print(get_rain(), DEC);
-                    Serial.println("mm");
-      
-                    Serial.print("Temperature: ");
-                    Serial.println(get_temperature_formatted());
-                    //Serial.println("--------------");
-                  }
-            
                 if(valid_crc())
                   {//unformatted string for LUA script decoding
-                    //Serial.println("------------------------------");
-                    Serial.print("WH1080:");
-                    Serial.print(get_sensor_id());
-                    Serial.print(":");
-                    Serial.print(get_temperature_formatted());
-                    Serial.print(":");
-                    Serial.print(get_humidity(), DEC);
-                    Serial.print(":");
-                    Serial.print(get_avg_wind(), DEC);
-                    Serial.print(":");
-                    Serial.print(get_gust_wind(), DEC);
-                    Serial.print(":");
-                    Serial.print(direction_name[get_wind_direction()]);
-                    //Serial.print(get_wind_direction(), DEC);//was HEX
-                    Serial.print(":");
-                    Serial.print(get_rain(), DEC);
-                    Serial.print(":");
-                    /*if(__bmp_fitted == 1){
-                      Serial.print(bmp.readPressure());
-                      Serial.print(":");
-                      Serial.print(bmp.readTemperature());
-                      Serial.print(":");
-                    }*/
-                    Serial.print(spacing, DEC);
-                    Serial.println(":END");
-                    //Serial.println("------------------------------");
-                    Serial.println();
+                    Serial.println("ok");
+//                    Serial.print(get_temperature_formatted());
+//                    Serial.print(":");
+//                    Serial.print(get_humidity(), DEC);
+//                    Serial.print(":");
+//                    Serial.print(get_avg_wind(), DEC);
+//                    Serial.print(":");
+//                    Serial.print(get_gust_wind(), DEC);
+//                    Serial.print(":");
+//                    Serial.print(direction_name[get_wind_direction()]);
+//                    Serial.print(":");
+//                    Serial.print(get_rain(), DEC);
+//                    Serial.println();
                   }
               }
             state = 0;//reset ready for next stream
           }
+      #endif
       }
   }
 
 static void rf12_init_OOK() 
 {
- /*   rf12_initialize(0, RF12_433MHZ);
+    rf12_initialize(0, RF12_433MHZ);
     rf12_control(0x8017); // 8027    433 Mhz;disabel tx register; disable RX
     rf12_control(0x82c0); // 82C0    enable receiver; enable basebandblock 
     rf12_control(0xA620); // A68A    433.2500 MHz
@@ -274,7 +238,7 @@ static void rf12_init_OOK()
     rf12_control(0xB800); // TX register write command not used
     rf12_control(0xC800); // disable low dutycycle 
     rf12_control(0xC040); // 1.66MHz,2.2V not used see 82c0  
-   */ return;
+    return;
 }
 
 static void extractData(word interval)

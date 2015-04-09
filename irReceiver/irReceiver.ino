@@ -48,14 +48,8 @@ void loop(void) {
   Serial.print("Heard ");
   Serial.print(numberpulses);
   Serial.println("-pulse long IR signal");
-  if (IRcompare(numberpulses, ApplePlaySignal,sizeof(ApplePlaySignal)/4)) {
-    Serial.println("PLAY");
-  }
-    if (IRcompare(numberpulses, AppleRewindSignal,sizeof(AppleRewindSignal)/4)) {
-    Serial.println("REWIND");
-  }
-    if (IRcompare(numberpulses, AppleForwardSignal,sizeof(AppleForwardSignal)/4)) {
-    Serial.println("FORWARD");
+  if (IRcompare(numberpulses, JVCOPENCLOSEsignal,sizeof(JVCOPENCLOSEsignal)/4)) {
+    Serial.println("OPEN");
   }
   delay(500);
 }

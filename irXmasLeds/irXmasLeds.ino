@@ -45,22 +45,50 @@ Adafruit_WS2801 strip = Adafruit_WS2801(50, dataPin, clockPin);
 
 #include "ircodes.h"
 
+long funcNum;
+voidFuncPtr functions[] = {/*fillup, fill, chase, theaterChase, theaterChaseRainbow, */
+                          rainbowCycle,
+                          //slow,
+                          simpleWaveRed,
+                          simpleWaveGreen,
+                          simpleWaveBlue,
+                          simpleWaveYellow,
+                          simpleWaveMagenta,
+                          twinkleRand,
+                          twinkleRandRed,
+                          twinkleRandGreen,
+                          twinkleRandBlue,
+                          twinkleRandYellow,
+                          twinkleRandMagenta,
+                          theaterChaseRainbow,
+                        };
+
 void setup(void) {
   Serial.begin(9600);
   Serial.println("Ready to decode IR!");
   
-  pinMode(4, INPUT);     //set the pin to input
-  digitalWrite(4, LOW); //use the internal pullup resistor
-  PCintPort::attachInterrupt(4, burpcount,RISING); // attach a PinChange Interrupt to our pin on the rising edge
+  //pinMode(4, INPUT);     //set the pin to input
+  //digitalWrite(4, LOW); //use the internal pullup resistor
+  //PCintPort::attachInterrupt(4, burpcount,RISING); // attach a PinChange Interrupt to our pin on the rising edge
 
   pinMode(13, OUTPUT);  
   
   strip.begin();
   // Update LED contents, to start they are all 'off'
   strip.show();
+  randomSeed(analogRead(4));
+  funcNum = random(sizeof(functions)/sizeof(functions[0]));
+  
+  pinMode(5, INPUT);     //set the pin to input
+  digitalWrite(5, HIGH); //use the internal pullup resistor
+  PCintPort::attachInterrupt(5, buttonburp,RISING); // attach a PinChange Interrupt to our pin on the rising edge
+
 }
+
+
 int numberpulses = 0;
 boolean IRPT = false;
+boolean BUTTON = false;
 void burpcount()
 {
   //Serial.println("burp");
@@ -68,18 +96,50 @@ void burpcount()
   IRPT = true;
 }
 
-voidFuncPtr runningFunc = simpleWave;
+void buttonburp() {    // Interrupt service routine. Every single PCINT8..14 (=ADC0..5) change
+            // will generate an interrupt: but this will always be the same interrupt routine
+//  cli();
+  delay(100);
+  Serial.println("Burp");
+  IRPT = true;
+  BUTTON = true;
+ // sei();
+}
+
+
+voidFuncPtr runningFunc = functions[funcNum];
 boolean running = true;
 void loop()
 {
-  
-  if (numberpulses > 0)
+  if (BUTTON ==true)
   {
-    if (IRcompare(numberpulses, STANDBY,sizeof(STANDBY)/4)) {
+        funcNum += 1;
+        if (funcNum >= sizeof(functions)/sizeof(functions[0]))
+        {
+          Serial.println("Off");
+           funcNum = -1;
+           running = false;
+           stripSet(0,0);
+        }
+        else
+        {
+          Serial.print("Function : ");
+          Serial.println(funcNum);
+          running = true;
+          runningFunc = functions[funcNum];
+        }
+        stripSet(0,0);
+  }
+  else if (numberpulses > 0)
+  {
+    stripSet(0,0);
+    if (IRcompare(numberpulses, STANDBY,sizeof(STANDBY)/4)) 
+    {
       if (running )
       {
         Serial.println("OFF");
         running = false;
+        stripSet(0,0);
       }
       else
       {
@@ -88,11 +148,12 @@ void loop()
       }
       
     }
+    
     else if(IRcompare(numberpulses, HOME,sizeof(HOME)/4)) {
-      runningFunc = simpleWave;
+      runningFunc = simpleWaveRed;
     }
     else if(IRcompare(numberpulses, STORAGE,sizeof(STORAGE)/4)) {
-      runningFunc = twinkleRandColor;
+      runningFunc = twinkleRandRed;
     }
     else if(IRcompare(numberpulses, MUTE,sizeof(MUTE)/4)) {
       runningFunc = twinkleRand;
@@ -101,7 +162,22 @@ void loop()
       runningFunc = theaterChaseRainbow;
     }
     else if(IRcompare(numberpulses, REWIND,sizeof(REWIND)/4)) {
-      runningFunc = theaterChase;
+      //runningFunc = theaterChase;
+      funcNum -=1;
+      if (funcNum < 0)
+        funcNum = sizeof(functions)/sizeof(functions[0]) -1;
+      runningFunc = functions[funcNum];
+              stripSet(0,0);
+
+    }
+    else if(IRcompare(numberpulses, FORWARD,sizeof(FORWARD)/4)) {
+      //runningFunc = theaterChase;
+      funcNum += 1;
+      if (funcNum >= sizeof(functions)/sizeof(functions[0]))
+        funcNum = 0;
+      runningFunc = functions[funcNum];
+              stripSet(0,0);
+
     }
     else{
       Serial.println("int IRsignal[] = {");
@@ -119,12 +195,13 @@ void loop()
     }
     numberpulses = 0;
     IRPT = false;
+    BUTTON=false;
   }
   if(running)
   {
     runningFunc();
   }
-  delay(50);
+  //delay(1);
 }
 
 

@@ -219,14 +219,9 @@ void loop()
                     Serial.println();
             
                   
-                    delay(5000);
+                    delay(1000);
                     Serial.println("Sent on RF PACK");
-                    delay(1000)
-                    rfwrite();
-                    rfwrite();
-                    rfwrite();
-                    rfwrite();
-                    
+                    delay(1000);
                     rfwrite();
                     
                     

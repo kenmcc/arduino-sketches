@@ -199,6 +199,7 @@ void loop()
                     Serial.print(get_sensor_id());
                     Serial.print(":");
                     Serial.print(get_temperature_formatted());
+                    get_temperature();
                     Serial.print(":");
                     Serial.print(get_humidity(), DEC);
                     Serial.print(":");
@@ -373,7 +374,7 @@ int get_temperature()
         temperature = -temperature;
       }
     temperature -= 400;
-    tinytx.tempX10 = (long int)temperature*10;
+    tinytx.tempX10 = (long int)temperature;
     return temperature;
   }
 

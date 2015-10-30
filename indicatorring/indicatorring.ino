@@ -17,6 +17,7 @@
 // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
 // example for more information on possible values.
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel pixels2 = Adafruit_NeoPixel(1,7, NEO_GRB + NEO_KHZ800);
 
 int delayval =250; // delay for half a second
 
@@ -28,6 +29,7 @@ void setup() {
   // End of trinket special code
 
   pixels.begin(); // This initializes the NeoPixel library.
+  pixels2.begin();
 }
 
 int left[][8] = {{1,0,0,0,1,0,0,0}, {1,1,0,1,1,0,0,0},{1,1,1,1,1,0,0,0},{0,1,1,1,0,0,0,0},{0,0,1,0,0,0,0,0},{0,0,0,0,0,0,0,0} };

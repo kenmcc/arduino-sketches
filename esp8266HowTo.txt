@@ -1,0 +1,7 @@
+Connections:
+Using the cp2012, connect +5v, 0v as normal
+Connect RXD and TXT to RX and TX, i.e. not crossed over
+Connect GPIOZero to ground while powering on to enable boot mode.
+
+Using arduino, select USBtinyISP as the programmer, and the correct serial port
+Occasionally get an "espcomm_open failed" message, try to power it on again.

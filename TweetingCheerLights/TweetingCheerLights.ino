@@ -1,25 +1,37 @@
 
-
-/*
- *  This sketch sends data via HTTP GET requests to data.sparkfun.com service.
- *
- *  You need to get streamId and privateKey at data.sparkfun.com and paste them
- *  below. Or just customize this script to talk to other HTTP servers.
- *
- */
-
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <Adafruit_NeoPixel.h>
 #include "TweetingCheerLightsPrivate.h"
 
+#include <Time.h>
+
 #ifdef __AVR__
   #include <avr/power.h>
 #endif
 
+struct colormap{
+  String color;
+  int rgbvals[3];
+};
 
-const char* ssid     = "S3AIR";
-const char* password = "LovinglyDelig";
+colormap myColorMap[] = {
+    {"red", {0xFF,0x00,0x00}},
+    {"green", {0x00, 0x80, 0x00}},
+    {"blue", {0x00, 0x00, 0xFF}},
+    {"cyan", {0x00, 0xFF, 0xFF}},
+    {"white", {0xFF, 0xFF, 0xFF}},
+    {"oldlace",{0xFD, 0xF5, 0xE6}},
+    {"warmwhite",{0xFD, 0xF5, 0xE6}},
+    {"purple", {0x80, 0x00, 0x80}},
+    {"magenta", {0xFF, 0x00, 0xFF}},
+    {"yellow", {0xFF, 0xFF, 0x00}},
+    {"orange", {0xFF, 0xA5, 0x00}},
+    {"pink", {0xFF, 0x70, 0xFF}}
+};
+
+
+
 
 const char* host = "api.thingspeak.com";
 const char* streamId   = "/channels/1417/field/2/last.json";
@@ -39,8 +51,6 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ80
 
 
 #define LIB_DOMAIN "arduino-tweet.appspot.com"
-
-
 char msg[128] = "";
 
 ////////////////////// NTP STUFF ////////////////////////////
@@ -57,14 +67,14 @@ byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing pack
 // A UDP instance to let us send and receive packets over UDP
 WiFiUDP udp;
 
-int currentcolors[NUMPIXELS][3] = {{0,0,0}};
+int currentcolors[NUMPIXELS][3] = {{0xFF,0,0}, {0x0,0xFF,0}, {0x00,0,0xFF}};
 unsigned long timeOfColorChange = 0;
 char timeString[20] = "";
-char currentColorString[15] = "";
+String currentColorString = "red";
 
 int boredomTime = 0;
-#define BOREDMIN 15
-#define BOREDMAX 30
+#define BOREDMIN 10
+#define BOREDMAX 20
 
 #define DELAYLOOP 15000 // 15 seconds
 
@@ -72,7 +82,7 @@ int boredomTime = 0;
 void setup() 
 {
   Serial.begin(115200);
-  delay(10);
+  delay(2);
 
   // We start by connecting to a WiFi network
   Serial.print("Connecting to ");
@@ -80,52 +90,45 @@ void setup()
   
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
+     delay(500);
     Serial.print(".");
   }
 
-  Serial.println("");
-  Serial.println("WiFi connected");  
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  Serial.print ("WiFi connected : ");    Serial.print("IP address: ");  Serial.println(WiFi.localIP());
+  
   
   pixels.begin(); // This initializes the NeoPixel library.
   
-  Serial.println("Starting UDP");
   udp.begin(localPort);
 
-  randomSeed(analogRead(0));
+  timeOfColorChange =getCurrentTime(timeString);
+
+  randomSeed(timeOfColorChange%100);
   boredomTime = random(BOREDMIN,BOREDMAX);
-  Serial.print("Boredom initially set to " );
-  Serial.println(boredomTime);
   
-  postWakeUpToTwitter();
+  Serial.print("Boredom initially set to " );   Serial.println(boredomTime);
   
   getRecentColors();
+  
+  postWakeUpToTwitter();
+  Serial.println("Setup Complete");
 }
-
-
-
 
 /********************** LOOP ******************************/
 void loop() 
 {
   unsigned long now =getCurrentTime(timeString);
  
-  int rgb[3] = {0,0,0};                           //define rgb pointer for ws2812
-  String rgbStr = askThingSpeak();
-  rgbStr.replace("%23","#");
-  getRGB(rgbStr,rgb);  
-  
-  if (rgb[0] != currentcolors[0][0] || rgb[1] != currentcolors[0][1] || rgb[2] != currentcolors[0][2])
+   /* get the current colours from the server */
+  String colorString = askThingSpeakString();
+  colorString.toLowerCase();
+  if (colorString.compareTo(currentColorString) != 0) // different colour 
   {
-    
-     
-
+    Serial.print(currentColorString); Serial.print("->"); Serial.println(colorString);
+      int rgb[3] = {0xFF,0,0};                           //define rgb pointer for ws2812
+      currentColorString = colorString;
+     getRGBFromColorMap(colorString, rgb);
      // we've got a new set of colours.
-    // reset the boredom time
-      boredomTime = random(BOREDMIN,BOREDMAX);
-      
       /* move everything up one in the list */
       for (int loop = NUMPIXELS-1; loop >0; loop--)
       {
@@ -136,18 +139,22 @@ void loop()
       }
       /*now add the new stuff */
       for (int p = 0; p < 3; p++)
-        {
+      {
           currentcolors[0][p] = rgb[p];
-        }
+      }
       
       timeOfColorChange = now;
       String boredomTimeString = timeFromSecs(now + (boredomTime*60), NULL);
-      Serial.print("Wheeee new colours, bored again in "); Serial.print(boredomTime); Serial.print(" Minutes from "); Serial.print(timeString); Serial.print(" at "); Serial.println(boredomTimeString);
-      for(int i=0;i<NUMPIXELS;i++)
-      {
-        pixels.setPixelColor(i, pixels.Color(currentcolors[i][0], currentcolors[i][1], currentcolors[i][2])); // Moderately bright green color.
-     }
-      pixels.show(); // This sends the updated pixel color to the hardware.
+      String dbgString = "Whee new colour " ;
+     dbgString += colorString ;
+     dbgString += ", but I'll be bored again at ";
+     dbgString += boredomTimeString;
+     dbgString += " which is in ";
+     dbgString +=  boredomTime;
+     dbgString += " minutes";
+      Serial.println(dbgString);
+      
+      updatePixels();
       return; // don't wait, we can go and get the new colour now
   }
   else
@@ -162,47 +169,21 @@ void loop()
   delay(DELAYLOOP);
 }
 
-String askThingSpeak()
+void updatePixels()
 {
-  WiFiClient client;
-  const int httpPort = 80;
-
-  // Use WiFiClient class to create TCP connections
-  if (!client.connect(host, httpPort)) {
-    Serial.println("connection failed");
-    return "";
-  }
-  
-  // We now create a URI for the request
-  String url = "";
-  url += streamId;
-  
-  
-  // This will send the request to the server
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-               "Host: " + host + "\r\n" + 
-               "Connection: close\r\n\r\n");
-  delay(10);
-  String rgbStr = "";
-  bool begin = false;
-  // Read all the lines of the reply from server and print them to Serial
-  while(client.available() || !begin )
-  {
-    char in = client.read();
-    if (in == '{') 
-    {
-        begin = true;
-    }
-    if (begin) rgbStr += (in);
-    if (in == '}') 
-    {
-        break;
-    }
-   delay(1);
-  }
- 
-  return rgbStr;
+        for(int i=0;i<NUMPIXELS;i++)
+      {
+        String ColorString  = String(i);
+       ColorString += ":";
+       ColorString +=currentcolors[i][0];
+       ColorString +=currentcolors[i][1];
+       ColorString +=currentcolors[i][2];
+        //Serial.println(ColorString);
+        pixels.setPixelColor(i, pixels.Color(currentcolors[i][0], currentcolors[i][1], currentcolors[i][2])); // Moderately bright green color.
+     }
+      pixels.show(); // This sends the updated pixel color to the hardware.
 }
+
 
 String askThingSpeakString()
 {
@@ -243,24 +224,26 @@ String askThingSpeakString()
    delay(1);
   }
  
-  return rgbStr;
+  
+  return getColorString(rgbStr);
 }
 
-void getRGB(String hexRGB, int *rgb) {
-  hexRGB.toUpperCase();
-  int s =  hexRGB.indexOf("FIELD2") + 9;
-  int end = s + 7;
-  String color = hexRGB.substring(s, end);
-  getRGBFromString(color, rgb);
-}
-
-void getRGBFromString(String color, int* rgb)
+void getRGBFromColorMap(String color, int* rgb)
 {
-  char c[7];
-  color.toCharArray(c,8);
-  rgb[0] = convertToInt(c[1],c[2]); //red
-  rgb[1] = convertToInt(c[3],c[4]); //green
-  rgb[2] = convertToInt(c[5],c[6]); //blue 
+  color.toLowerCase();
+  int entries = sizeof(myColorMap)/sizeof(myColorMap[0]);
+  int x = 0;
+  for (x = 0; x < entries; x++)
+  {
+    if (color.compareTo(myColorMap[x].color) == 0)
+    {
+      rgb[0] = myColorMap[x].rgbvals[0];
+      rgb[1] = myColorMap[x].rgbvals[1];
+      rgb[2] = myColorMap[x].rgbvals[2];
+      break;
+    }
+  }
+  
 }
 
 String getColorString(String input)
@@ -274,17 +257,6 @@ String getColorString(String input)
    return color;
 }
 
-int convertToInt(char upper,char lower)
-{
-  int uVal = (int)upper;
-  int lVal = (int)lower;
-  uVal = uVal >64 ? uVal - 55 : uVal - 48;
-  uVal = uVal << 4;
-  lVal = lVal >64 ? lVal - 55 : lVal - 48;
-  return uVal + lVal;
-}
-
-
 void postToTwitter()
 {
   String currentColorStringRaw = askThingSpeakString();
@@ -293,20 +265,19 @@ void postToTwitter()
    WiFiClient client;
   const int httpPort = 80;
   
-  const String colors[] = {"red", "green", "blue", "cyan", "purple", "yellow", "orange", "pink", "magenta", "white"};
-  int rndCol = random(10);
+  const String colors[] = {"red", "green", "blue", "cyan", "purple", "yellow", "orange", "pink", "magenta"};
+  int rndCol = random(sizeof(colors)/sizeof(colors[0]));
   while (theCurrentColorString.compareTo(colors[rndCol]) == 0)
   {
-    Serial.print("already is ");
-    Serial.println(colors[rndCol]);
-    rndCol = random(10);
+    Serial.print("already is "); Serial.println(colors[rndCol]);
+    rndCol = random(sizeof(colors)/sizeof(colors[0]));
   }
   
   memset(msg, 0, 128);
-  snprintf(msg, 128, "@cheerlights, I'm a bored ESP8266. It's %s and I want the %s lights. I'll be bored again in %d minutes", timeString, colors[rndCol].c_str(), boredomTime);
+  snprintf(msg, 128, "@cheerlights, I'm a bored ESP8266. It's %s and I want the %s lights. I'll be bored again soon so keep me interested", timeString, colors[rndCol].c_str());
   
     
-  Serial.print("Trying to twat"); 
+  Serial.print("Trying to twat "); 
   Serial.println(msg);
   
   if (client.connect(LIB_DOMAIN, 80))
@@ -324,19 +295,15 @@ void postToTwitter()
 
 void postWakeUpToTwitter()
 {
-  String currentColorStringRaw = askThingSpeakString();
-  String theCurrentColorString = getColorString(currentColorStringRaw);
-  
    WiFiClient client;
   const int httpPort = 80;
   
   getCurrentTime(timeString);
   
   memset(msg, 0, 128);
-  snprintf(msg, 128, "Howdy, I'm a ESP8266 low on patience, waking up at %s and the lights are apparently %s. I'll be bored in %d minutes", timeString, theCurrentColorString.c_str(), boredomTime);
+  snprintf(msg, 128, "Howdy, I'm a ESP8266 low on patience, waking up at %s and the lights are apparently %s. I'll be bored in %d minutes", timeString, currentColorString.c_str(), boredomTime);
   
-    
-  Serial.print("Trying to twat"); 
+  Serial.print("Trying to twat wakeup "); 
   Serial.println(msg);
   
   if (client.connect(LIB_DOMAIN, 80))
@@ -475,26 +442,36 @@ void getRecentColors(void)
   
   all.toUpperCase();
 
+Serial.println("History says: ");
   for (int x = 0; x < NUMPIXELS; x++)
  {
    int lastEntryPos = all.lastIndexOf("{");
    String lastEntry = all.substring(lastEntryPos);
    
-   int lastFieldPos = lastEntry.lastIndexOf("FIELD2") + 9;
+   int lastFieldPos = lastEntry.lastIndexOf("FIELD1") + 9;
    String color = lastEntry.substring(lastFieldPos);
    int endOfColorPos = color.indexOf("\"");
    color = color.substring(0, endOfColorPos);
-   getRGBFromString(color, currentcolors[x]);
+   Serial.println(color);
+   getRGBFromColorMap(color, currentcolors[x]);
    
    /* now we remove the last 2 entries */
    all.remove(lastEntryPos);
    lastEntryPos = all.lastIndexOf("{");
    all.remove(lastEntryPos);
+   
+   if (x == 0)
+   {
+     color.toLowerCase();
+     currentColorString = color;
+   }
  } 
  
  
- 
+ updatePixels();
  
  
   //Serial.println (all);
 }
+
+

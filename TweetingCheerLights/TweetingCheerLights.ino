@@ -11,6 +11,7 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <Adafruit_NeoPixel.h>
+#include "TweetingCheerLightsPrivate.h"
 
 #ifdef __AVR__
   #include <avr/power.h>
@@ -29,7 +30,7 @@ const char* textStreamId   = "/channels/1417/field/1/last.json";
 #define PIN            4
 
 // How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS     1
+#define NUMPIXELS     8
 
 // When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
 // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
@@ -39,7 +40,7 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ80
 
 #define LIB_DOMAIN "arduino-tweet.appspot.com"
 
-const char* token="TWITKEY";
+
 char msg[128] = "";
 
 ////////////////////// NTP STUFF ////////////////////////////
@@ -56,14 +57,14 @@ byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing pack
 // A UDP instance to let us send and receive packets over UDP
 WiFiUDP udp;
 
-int currentcolors[3] = {-1,-1,-1};
+int currentcolors[NUMPIXELS][3] = {{0,0,0}};
 unsigned long timeOfColorChange = 0;
 char timeString[20] = "";
 char currentColorString[15] = "";
 
 int boredomTime = 0;
-#define BOREDMIN 5
-#define BOREDMAX 10
+#define BOREDMIN 15
+#define BOREDMAX 30
 
 #define DELAYLOOP 15000 // 15 seconds
 
@@ -97,6 +98,10 @@ void setup()
   boredomTime = random(BOREDMIN,BOREDMAX);
   Serial.print("Boredom initially set to " );
   Serial.println(boredomTime);
+  
+  postWakeUpToTwitter();
+  
+  getRecentColors();
 }
 
 
@@ -112,29 +117,45 @@ void loop()
   rgbStr.replace("%23","#");
   getRGB(rgbStr,rgb);  
   
-  for(int i=0;i<NUMPIXELS;i++){
-
-    // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-    pixels.setPixelColor(i, pixels.Color(rgb[0], rgb[1], rgb[2])); // Moderately bright green color.
-  }
-  pixels.show(); // This sends the updated pixel color to the hardware.
-   // capture the values and the time....
-  if (rgb[0] != currentcolors[0] || rgb[1] != currentcolors[1] || rgb[2] != currentcolors[2])
+  if (rgb[0] != currentcolors[0][0] || rgb[1] != currentcolors[0][1] || rgb[2] != currentcolors[0][2])
   {
-    Serial.print("Wheeee new colours, bored again in "); Serial.print(boredomTime); Serial.println(" Minutes");
+    
+     
+
      // we've got a new set of colours.
-      currentcolors[0] = rgb[0];
-      currentcolors[1] = rgb[1];
-      currentcolors[2] = rgb[2];
-     timeOfColorChange = now;
+    // reset the boredom time
+      boredomTime = random(BOREDMIN,BOREDMAX);
+      
+      /* move everything up one in the list */
+      for (int loop = NUMPIXELS-1; loop >0; loop--)
+      {
+        for (int p = 0; p < 3; p++)
+        {
+          currentcolors[loop][p] = currentcolors[loop-1][p];
+        }
+      }
+      /*now add the new stuff */
+      for (int p = 0; p < 3; p++)
+        {
+          currentcolors[0][p] = rgb[p];
+        }
+      
+      timeOfColorChange = now;
+      String boredomTimeString = timeFromSecs(now + (boredomTime*60), NULL);
+      Serial.print("Wheeee new colours, bored again in "); Serial.print(boredomTime); Serial.print(" Minutes from "); Serial.print(timeString); Serial.print(" at "); Serial.println(boredomTimeString);
+      for(int i=0;i<NUMPIXELS;i++)
+      {
+        pixels.setPixelColor(i, pixels.Color(currentcolors[i][0], currentcolors[i][1], currentcolors[i][2])); // Moderately bright green color.
+     }
+      pixels.show(); // This sends the updated pixel color to the hardware.
+      return; // don't wait, we can go and get the new colour now
   }
   else
   {
     if ((now - timeOfColorChange) > boredomTime * 60)
     {
       boredomTime = random(BOREDMIN,BOREDMAX);
-      Serial.print("BORED, setting to new boredom time of ");
-      Serial.println(boredomTime);
+      Serial.print("BORED, setting to new boredom time of "); Serial.println(boredomTime);
       postToTwitter();
     }
   }
@@ -230,6 +251,11 @@ void getRGB(String hexRGB, int *rgb) {
   int s =  hexRGB.indexOf("FIELD2") + 9;
   int end = s + 7;
   String color = hexRGB.substring(s, end);
+  getRGBFromString(color, rgb);
+}
+
+void getRGBFromString(String color, int* rgb)
+{
   char c[7];
   color.toCharArray(c,8);
   rgb[0] = convertToInt(c[1],c[2]); //red
@@ -242,11 +268,8 @@ String getColorString(String input)
   input.toUpperCase();
   int s =  input.indexOf("FIELD1") + 9;
   String color = input.substring(s);
-    Serial.println(  color);
   int end = color.indexOf("\"");
   color = color.substring(0, end);
-  Serial.print("NOW THE COLOR IS ");
-  Serial.println(  color);
    color.toLowerCase();
    return color;
 }
@@ -299,6 +322,36 @@ void postToTwitter()
   }
 }
 
+void postWakeUpToTwitter()
+{
+  String currentColorStringRaw = askThingSpeakString();
+  String theCurrentColorString = getColorString(currentColorStringRaw);
+  
+   WiFiClient client;
+  const int httpPort = 80;
+  
+  getCurrentTime(timeString);
+  
+  memset(msg, 0, 128);
+  snprintf(msg, 128, "Howdy, I'm a ESP8266 low on patience, waking up at %s and the lights are apparently %s. I'll be bored in %d minutes", timeString, theCurrentColorString.c_str(), boredomTime);
+  
+    
+  Serial.print("Trying to twat"); 
+  Serial.println(msg);
+  
+  if (client.connect(LIB_DOMAIN, 80))
+  {
+    client.println("POST http://" LIB_DOMAIN "/update HTTP/1.0");
+		client.print("Content-Length: ");
+		client.println(strlen(msg)+strlen(token)+14);
+		client.println();
+		client.print("token=");
+		client.print(token);
+		client.print("&status=");
+		client.println(msg);
+  }
+}
+
 unsigned long getCurrentTime(char* timeString)
 {
     //get a random server from the pool
@@ -311,7 +364,7 @@ unsigned long getCurrentTime(char* timeString)
   int cb = udp.parsePacket();
   if (!cb) {
     Serial.println("no packet yet");
-    return 0;
+    return timeOfColorChange;
   }
   else {
     // We've received a packet, read the data from it
@@ -326,33 +379,39 @@ unsigned long getCurrentTime(char* timeString)
     // this is NTP time (seconds since Jan 1 1900):
     unsigned long secsSince1900 = highWord << 16 | lowWord;
     
-    // now convert NTP time into everyday time:
-    // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
-    const unsigned long seventyYears = 2208988800UL;
-    // subtract seventy years:
-    unsigned long epoch = secsSince1900 - seventyYears;
-    // print Unix time:
-    
-    int h, m, s;
-    h = (epoch  % 86400L) / 3600;
-    m = (epoch  % 3600) / 60;
-    s = (epoch%60);
-
-    sprintf(timeString, "%02d:%02d:%02d", h, m, s);
-
-    // print the hour, minute and second:
-    Serial.print("The UTC time is ");       // UTC is the time at Greenwich Meridian (GMT)
-    Serial.println(timeString); // print the second
+    timeFromSecs(secsSince1900, timeString);
     
     return secsSince1900;
   }
   return 0;
 }
 
+String timeFromSecs(unsigned long secs, char* timeStr)
+{
+    // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
+    const unsigned long seventyYears = 2208988800UL;
+    // subtract seventy years:
+    unsigned long epoch = secs - seventyYears;
+    
+    int h, m, s;
+    h = (epoch  % 86400L) / 3600;
+    m = (epoch  % 3600) / 60;
+    s = (epoch%60);
+
+    if (timeStr != NULL)
+    {
+      sprintf(timeString, "%02d:%02d:%02d", h, m, s);
+    }
+    char localTimer[10] = "";
+    snprintf(localTimer, 10, "%02d:%02d:%02d", h, m, s);
+    String timer = String(localTimer);
+    return timer;
+    
+}
+
 // send an NTP request to the time server at the given address
 unsigned long sendNTPpacket(IPAddress& address)
 {
-  Serial.println("sending NTP packet...");
   // set all bytes in the buffer to 0
   memset(packetBuffer, 0, NTP_PACKET_SIZE);
   // Initialize values needed to form NTP request
@@ -372,4 +431,70 @@ unsigned long sendNTPpacket(IPAddress& address)
   udp.beginPacket(address, 123); //NTP requests are to port 123
   udp.write(packetBuffer, NTP_PACKET_SIZE);
   udp.endPacket();
+}
+
+void getRecentColors(void)
+{
+  WiFiClient client;
+  const int httpPort = 80;
+
+  // Use WiFiClient class to create TCP connections
+  if (!client.connect(host, httpPort)) {
+    Serial.println("connection failed");
+    return;
+  }
+  
+  // We now create a URI for the request
+  String url = "/channels/1417/feed.json";
+  
+  // This will send the request to the server
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" + 
+               "Connection: close\r\n\r\n");
+  delay(10);
+  String all = "";
+  bool begin = false;
+  // Read all the lines of the reply from server and print them to Serial
+  while(client.available() || !begin )
+  {
+    char in = client.read();
+    if (in == '[') 
+    {
+        begin = true;
+    }
+    if (begin) all += (in);
+    if (in == ']') 
+    {
+        break;
+    }
+   delay(1);
+  }
+ 
+ /* at this stage we have the last number of colours . we want to find the last N elements of FIELD2 
+ and start filling in an array of previous colours. for some reason the strings are doubled so go back 2 every time....*/
+  
+  all.toUpperCase();
+
+  for (int x = 0; x < NUMPIXELS; x++)
+ {
+   int lastEntryPos = all.lastIndexOf("{");
+   String lastEntry = all.substring(lastEntryPos);
+   
+   int lastFieldPos = lastEntry.lastIndexOf("FIELD2") + 9;
+   String color = lastEntry.substring(lastFieldPos);
+   int endOfColorPos = color.indexOf("\"");
+   color = color.substring(0, endOfColorPos);
+   getRGBFromString(color, currentcolors[x]);
+   
+   /* now we remove the last 2 entries */
+   all.remove(lastEntryPos);
+   lastEntryPos = all.lastIndexOf("{");
+   all.remove(lastEntryPos);
+ } 
+ 
+ 
+ 
+ 
+ 
+  //Serial.println (all);
 }

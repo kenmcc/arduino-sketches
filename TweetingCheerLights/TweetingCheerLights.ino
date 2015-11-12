@@ -6,7 +6,7 @@
 
 #include <Time.h>
 
-#ifdef __AVR__
+#if __AVR__
   #include <avr/power.h>
 #endif
 
@@ -31,7 +31,7 @@ colormap myColorMap[] = {
 };
 
 
-
+#define DEBUG 1
 
 const char* host = "api.thingspeak.com";
 const char* streamId   = "/channels/1417/field/2/last.json";
@@ -65,18 +65,32 @@ const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of th
 byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
 
 // A UDP instance to let us send and receive packets over UDP
-WiFiUDP udp;
+///WiFiUDP udp;
 
 int currentcolors[NUMPIXELS][3] = {{0xFF,0,0}, {0x0,0xFF,0}, {0x00,0,0xFF}};
 unsigned long timeOfColorChange = 0;
 char timeString[20] = "";
 String currentColorString = "red";
 
+unsigned long milliseconds = 0;
+
+unsigned long nowTime = 0;
+
 int boredomTime = 0;
 #define BOREDMIN 10
 #define BOREDMAX 20
 
-#define DELAYLOOP 15000 // 15 seconds
+#define DELAYLOOP 30000 // 30 seconds
+
+void software_Reset()
+{
+  Serial.println("REBOOTING");
+  wdt_enable(WDTO_15MS);
+  while(1)
+  {
+    
+  }
+}
 
 /***************************************** SETUP *******************************/
 void setup() 
@@ -85,46 +99,61 @@ void setup()
   delay(2);
 
   // We start by connecting to a WiFi network
-  Serial.print("Connecting to ");
+#if DEBUG 
+ Serial.print("Connecting to ");
   Serial.println(ssid);
-  
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-     delay(500);
-    Serial.print(".");
-  }
+#endif
 
-  Serial.print ("WiFi connected : ");    Serial.print("IP address: ");  Serial.println(WiFi.localIP());
+  connectToNetwork();
+
+  
   
   
   pixels.begin(); // This initializes the NeoPixel library.
   
-  udp.begin(localPort);
+ // udp.begin(localPort);
 
   timeOfColorChange =getCurrentTime(timeString);
+  nowTime = timeOfColorChange;
 
   randomSeed(timeOfColorChange%100);
   boredomTime = random(BOREDMIN,BOREDMAX);
-  
+  #if DEBUG 
   Serial.print("Boredom initially set to " );   Serial.println(boredomTime);
-  
+  #endif
   getRecentColors();
   
   postWakeUpToTwitter();
   Serial.println("Setup Complete");
 }
 
+void connectToNetwork()
+{
+  WiFi.disconnect();
+  delay(500);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+     delay(500);
+    Serial.print(".");
+  }
+  Serial.print ("WiFi connected : ");    Serial.print("IP address: ");  Serial.println(WiFi.localIP());
+  delay(500);
+}
+
 /********************** LOOP ******************************/
 void loop() 
 {
-  unsigned long now =getCurrentTime(timeString);
+  nowTime =getCurrentTime(timeString);
  
+
    /* get the current colours from the server */
   String colorString = askThingSpeakString();
   colorString.toLowerCase();
   if (colorString.compareTo(currentColorString) != 0) // different colour 
   {
+    #if DEBUG 
     Serial.print(currentColorString); Serial.print("->"); Serial.println(colorString);
+    #endif
       int rgb[3] = {0xFF,0,0};                           //define rgb pointer for ws2812
       currentColorString = colorString;
      getRGBFromColorMap(colorString, rgb);
@@ -143,8 +172,8 @@ void loop()
           currentcolors[0][p] = rgb[p];
       }
       
-      timeOfColorChange = now;
-      String boredomTimeString = timeFromSecs(now + (boredomTime*60), NULL);
+      timeOfColorChange = nowTime;
+      String boredomTimeString = timeFromSecs(nowTime + (boredomTime*60), NULL);
       String dbgString = "Whee new colour " ;
      dbgString += colorString ;
      dbgString += ", but I'll be bored again at ";
@@ -152,17 +181,20 @@ void loop()
      dbgString += " which is in ";
      dbgString +=  boredomTime;
      dbgString += " minutes";
+     #if DEBUG 
       Serial.println(dbgString);
-      
+      #endif
       updatePixels();
       return; // don't wait, we can go and get the new colour now
   }
   else
   {
-    if ((now - timeOfColorChange) > boredomTime * 60)
+    if ((nowTime - timeOfColorChange) > boredomTime * 60)
     {
       boredomTime = random(BOREDMIN,BOREDMAX);
+      #if DEBUG 
       Serial.print("BORED, setting to new boredom time of "); Serial.println(boredomTime);
+      #endif
       postToTwitter();
     }
   }
@@ -187,31 +219,54 @@ void updatePixels()
 
 String askThingSpeakString()
 {
-  WiFiClient client;
+  WiFiClient thingspeakClient;
   const int httpPort = 80;
-
   // Use WiFiClient class to create TCP connections
-  if (!client.connect(host, httpPort)) {
-    Serial.println("connection failed");
-    return "";
-  }
   
+  #if DEBUG 
+  Serial.println("Going to ask thingspeak");
+  #endif
+  if(!thingspeakClient.connected())
+  {
+#if DEBUG 
+       Serial.println("Connecting to thingspeak");
+#endif
+      if (!thingspeakClient.connect(host, httpPort)) {
+#if DEBUG         
+        Serial.print("connection to "); Serial.print(host); Serial.println("  failed");
+#endif
+        if (WiFi.status() != WL_CONNECTED)
+        {
+#if DEBUG           
+          Serial.print("WifiStatus is ");Serial.println(WiFi.status());
+#endif          
+        }
+        software_Reset();
+          return currentColorString;
+      }
+  }
+  else
+  {
+#if DEBUG 
+    Serial.println("It's connected");
+#endif
+  }
+  thingspeakClient.flush();
   // We now create a URI for the request
-  String url = "";
-  url += textStreamId;
+  String url = textStreamId;
   
   
   // This will send the request to the server
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+  thingspeakClient.print(String("GET ") + url + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" + 
                "Connection: close\r\n\r\n");
-  delay(10);
+  delay(500);
   String rgbStr = "";
   bool begin = false;
   // Read all the lines of the reply from server and print them to Serial
-  while(client.available() || !begin )
+  while(thingspeakClient.available() || !begin )
   {
-    char in = client.read();
+    char in = thingspeakClient.read();
     if (in == '{') 
     {
         begin = true;
@@ -223,8 +278,9 @@ String askThingSpeakString()
     }
    delay(1);
   }
- 
-  
+ #if DEBUG 
+  Serial.print("Current Color = "); Serial.println(getColorString(rgbStr));
+#endif  
   return getColorString(rgbStr);
 }
 
@@ -269,17 +325,20 @@ void postToTwitter()
   int rndCol = random(sizeof(colors)/sizeof(colors[0]));
   while (theCurrentColorString.compareTo(colors[rndCol]) == 0)
   {
+#if DEBUG     
     Serial.print("already is "); Serial.println(colors[rndCol]);
+#endif    
     rndCol = random(sizeof(colors)/sizeof(colors[0]));
   }
   
   memset(msg, 0, 128);
-  snprintf(msg, 128, "@cheerlights, I'm a bored ESP8266. It's %s and I want the %s lights. I'll be bored again soon so keep me interested", timeString, colors[rndCol].c_str());
+  snprintf(msg, 128, "@cheerlights, I'm a bored ESP8266 and I want the %s lights. I'll be bored again soon so keep me interested", colors[rndCol].c_str());
   
-    
+#if DEBUG     
   Serial.print("Trying to twat "); 
   Serial.println(msg);
-  
+#endif
+
   if (client.connect(LIB_DOMAIN, 80))
   {
     client.println("POST http://" LIB_DOMAIN "/update HTTP/1.0");
@@ -291,6 +350,7 @@ void postToTwitter()
 		client.print("&status=");
 		client.println(msg);
   }
+  
 }
 
 void postWakeUpToTwitter()
@@ -298,14 +358,16 @@ void postWakeUpToTwitter()
    WiFiClient client;
   const int httpPort = 80;
   
-  getCurrentTime(timeString);
+  nowTime = getCurrentTime(timeString);
   
   memset(msg, 0, 128);
   snprintf(msg, 128, "Howdy, I'm a ESP8266 low on patience, waking up at %s and the lights are apparently %s. I'll be bored in %d minutes", timeString, currentColorString.c_str(), boredomTime);
-  
+
+#if DEBUG   
   Serial.print("Trying to twat wakeup "); 
   Serial.println(msg);
-  
+#endif
+
   if (client.connect(LIB_DOMAIN, 80))
   {
     client.println("POST http://" LIB_DOMAIN "/update HTTP/1.0");
@@ -318,22 +380,48 @@ void postWakeUpToTwitter()
 		client.println(msg);
   }
 }
-
+static int timerLoop = 0;
+static int firstTime = 1;
 unsigned long getCurrentTime(char* timeString)
 {
-    //get a random server from the pool
-  WiFi.hostByName(ntpServerName, timeServerIP); 
+  
+  unsigned long thisMillis = millis();
+  unsigned long secondsDelta = (thisMillis - milliseconds)/1000;
+  milliseconds = thisMillis;
+  
+  //get a random server from the pool
+  //WiFi.hostByName(ntpServerName, timeServerIP); 
 
-    sendNTPpacket(timeServerIP); // send an NTP packet to a time server
+ //   sendNTPpacket(timeServerIP); // send an NTP packet to a time server
   // wait to see if a reply is available
   delay(2000);
   
-  int cb = udp.parsePacket();
+  int cb = 0;
+  if (timerLoop%10 == 0)
+  {
+    //cb = udp.parsePacket();
+    if (firstTime == 0)
+    {
+      timerLoop++;
+    }
+  }
   if (!cb) {
-    Serial.println("no packet yet");
-    return timeOfColorChange;
+    if (timerLoop%10 == 0)
+    {
+#if DEBUG 
+      Serial.print("no packet yet, returning"); Serial.println(nowTime + secondsDelta);
+#endif
+    }
+    if (WiFi.status() != WL_CONNECTED)
+    {
+#if DEBUG     
+      Serial.print("WifiStatus is ");Serial.println(WiFi.status());
+#endif
+    }
+    return nowTime + secondsDelta;
   }
   else {
+    /*
     // We've received a packet, read the data from it
     udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
 
@@ -347,8 +435,12 @@ unsigned long getCurrentTime(char* timeString)
     unsigned long secsSince1900 = highWord << 16 | lowWord;
     
     timeFromSecs(secsSince1900, timeString);
-    
+    firstTime = 0;
+#if DEBUG     
+    Serial.print("Returning time "); Serial.println(nowTime + secondsDelta);
+#endif    
     return secsSince1900;
+    */
   }
   return 0;
 }
@@ -375,7 +467,7 @@ String timeFromSecs(unsigned long secs, char* timeStr)
     return timer;
     
 }
-
+/*
 // send an NTP request to the time server at the given address
 unsigned long sendNTPpacket(IPAddress& address)
 {
@@ -399,32 +491,47 @@ unsigned long sendNTPpacket(IPAddress& address)
   udp.write(packetBuffer, NTP_PACKET_SIZE);
   udp.endPacket();
 }
-
+*/
 void getRecentColors(void)
 {
-  WiFiClient client;
+WiFiClient thingspeakClient;
   const int httpPort = 80;
-
-  // Use WiFiClient class to create TCP connections
-  if (!client.connect(host, httpPort)) {
-    Serial.println("connection failed");
-    return;
-  }
+  int connected = 0;
   
+   if(!thingspeakClient.connected())
+  {
+#if DEBUG     
+    Serial.println("Connecting to thingspeak to get recent colors");
+#endif    
+      if (!thingspeakClient.connect(host, httpPort)) {
+#if DEBUG         
+        Serial.print("connection to "); Serial.print(host); Serial.println("  failed");
+#endif        
+        if (WiFi.status() != WL_CONNECTED)
+        {
+#if DEBUG           
+          Serial.print("WifiStatus is ");Serial.println(WiFi.status());
+#endif          
+        }
+        software_Reset();
+          return;
+      }
+  }
+    thingspeakClient.flush();
   // We now create a URI for the request
   String url = "/channels/1417/feed.json";
   
   // This will send the request to the server
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+  thingspeakClient.print(String("GET ") + url + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" + 
                "Connection: close\r\n\r\n");
-  delay(10);
+  delay(1000);
   String all = "";
   bool begin = false;
   // Read all the lines of the reply from server and print them to Serial
-  while(client.available() || !begin )
+  while(thingspeakClient.available() || !begin )
   {
-    char in = client.read();
+    char in = thingspeakClient.read();
     if (in == '[') 
     {
         begin = true;
@@ -442,7 +549,9 @@ void getRecentColors(void)
   
   all.toUpperCase();
 
+#if DEBUG 
 Serial.println("History says: ");
+#endif
   for (int x = 0; x < NUMPIXELS; x++)
  {
    int lastEntryPos = all.lastIndexOf("{");
@@ -452,7 +561,9 @@ Serial.println("History says: ");
    String color = lastEntry.substring(lastFieldPos);
    int endOfColorPos = color.indexOf("\"");
    color = color.substring(0, endOfColorPos);
+#if DEBUG    
    Serial.println(color);
+#endif   
    getRGBFromColorMap(color, currentcolors[x]);
    
    /* now we remove the last 2 entries */

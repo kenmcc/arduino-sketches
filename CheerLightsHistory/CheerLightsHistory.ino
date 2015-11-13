@@ -80,6 +80,7 @@ void software_Reset()
 /***************************************** SETUP *******************************/
 void setup() 
 {
+  wdt_disable();
   Serial.begin(115200);
   delay(2);
 
@@ -100,6 +101,7 @@ void setup()
 
   getRecentColors();
   
+   wdt_enable(WDTO_8S);
   Serial.println("Setup Complete");
 }
 
@@ -121,11 +123,14 @@ static int rotationStart = 0;
 /********************** LOOP ******************************/
 void loop() 
 {
+  wdt_reset();
   loopCount++;
    /* get the current colours from the server */
   if (loopCount % ASK_FREQUENCY == 0)
   {
+    
     String colorString = askThingSpeakString();
+    
     colorString.toLowerCase();
     if (colorString.compareTo(currentColorString) != 0) // different colour 
     {

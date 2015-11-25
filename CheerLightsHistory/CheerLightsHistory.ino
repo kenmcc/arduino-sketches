@@ -33,6 +33,7 @@ colormap myColorMap[] = {
 
 
 #define DEBUG 1
+#define MULTICOLORS 0
 
 const char* host = "api.thingspeak.com";
 const char* streamId   = "/channels/1417/field/2/last.json";
@@ -65,65 +66,96 @@ String currentColorString = "red";
 
 #define DELAYLOOP 1000 // 30 seconds
 static unsigned int loopCount = 0;
+#if MULTICOLORS
 #define ASK_FREQUENCY  (60/(DELAYLOOP/1000)) //ask every minute
-
+#else
+#define ASK_FREQUENCY  (20/(DELAYLOOP/1000)) //ask every minute
+#endif
 void software_Reset()
 {
-  Serial.println("REBOOTING");
+  /*Serial.println("REBOOTING");
   wdt_enable(WDTO_15MS);
   while(1)
   {
     
-  }
+  }*/
 }
 
 /***************************************** SETUP *******************************/
 void setup() 
 {
-  wdt_disable();
+  //wdt_disable();
   Serial.begin(115200);
   delay(2);
 
-  // We start by connecting to a WiFi network
-#if DEBUG 
- Serial.print("Connecting to ");
-  Serial.println(ssid);
-#endif
-
-  connectToNetwork();
-
-  
-  
-  
+ 
   pixels.begin(); // This initializes the NeoPixel library.
   
  // udp.begin(localPort);
 
   getRecentColors();
   
-   wdt_enable(WDTO_8S);
+   //wdt_enable(WDTO_8S);
   Serial.println("Setup Complete");
 }
 
-void connectToNetwork()
-{
-  WiFi.disconnect();
-  delay(500);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-     delay(500);
-    Serial.print(".");
-  }
-  Serial.print ("WiFi connected : ");    Serial.print("IP address: ");  Serial.println(WiFi.localIP());
-  delay(500);
+void startWIFI(void) {
+    // Connect to WiFi network
+    Serial.println();
+    delay(10);
+    Serial.println();
+    delay(10);
+    for (int loop = 0; loop < 2; loop++)
+    {
+          Serial.print("Connecting to ");
+          delay(10);
+          Serial.println(ssid[loop]);
+          delay(10);
+
+        unsigned long start = millis();
+        WiFi.begin(ssid[loop], password[loop]);
+  
+      while (WiFi.status() != WL_CONNECTED) {
+          Serial.print(".");
+          delay(500);
+          unsigned long now = millis();
+          if ((now - start) > 20000)
+          {
+            Serial.println("Trying a different ssid");
+            break;
+          }
+      }
+      
+      if(WiFi.status() == WL_CONNECTED) 
+      {     
+              Serial.println("");
+              Serial.println("WiFi connected");
+              break;
+      }
+    }
+
+
+    // Print the IP address
+    Serial.print("ESP8266 IP: ");
+    Serial.println(WiFi.localIP());
+
+     delay(300);
 }
+
 
 
 static int rotationStart = 0;
 /********************** LOOP ******************************/
 void loop() 
 {
-  wdt_reset();
+  //connect wifi if not connected
+if (WiFi.status() != WL_CONNECTED) {
+    delay(1);
+    startWIFI();
+    return;
+}
+  
+  //wdt_reset();
   loopCount++;
    /* get the current colours from the server */
   if (loopCount % ASK_FREQUENCY == 0)
@@ -142,6 +174,7 @@ void loop()
        getRGBFromColorMap(colorString, rgb);
        // we've got a new set of colours.
         /* move everything up one in the list */
+#if MULTICOLORS
         for (int loop = NUMPIXELS-1; loop >0; loop--)
         {
           for (int p = 0; p < 3; p++)
@@ -154,6 +187,15 @@ void loop()
         {
             currentcolors[0][p] = rgb[p];
         }
+#else
+        for (int loop = 0; loop < NUMPIXELS; loop++)
+        {
+          for (int p = 0; p < 3; p++)
+          {
+            currentcolors[loop][p] = rgb[p];
+          }
+        }
+#endif
         
   
          String dbgString = "Whee new colour " ;
@@ -165,10 +207,14 @@ void loop()
         updatePixels(0);
     }
   }
+  #if MULTICOLORS
   else
   {
      #if DEBUG 
-        Serial.println("SPIN");
+     if(rotationStart == 0)
+     {
+       Serial.println("SPIN");
+     }
     #endif
     rotationStart++;
     if (rotationStart == NUMPIXELS)
@@ -177,7 +223,7 @@ void loop()
     }
     updatePixels(rotationStart);
   }
-  
+  #endif
   delay(DELAYLOOP);
 }
 
@@ -192,6 +238,11 @@ void updatePixels(int rotationStart)
        ColorString +=currentcolors[i][2];
         //Serial.println(ColorString);
         pixels.setPixelColor((i+rotationStart)%NUMPIXELS, pixels.Color(currentcolors[i][0], currentcolors[i][1], currentcolors[i][2])); // Moderately bright green color.
+#if MULTICOLORS
+#else
+       pixels.show();
+       delay(100);
+#endif
      }
       pixels.show(); // This sends the updated pixel color to the hardware.
 }
@@ -299,7 +350,11 @@ void getRecentColors(void)
 {
   for (int x = 0; x < NUMPIXELS; x++)
  {
-  String color= myColorMap[x].color;
+  #if MULTICOLORS 
+      String color= myColorMap[x].color;
+  #else
+      String color= myColorMap[0].color;
+  #endif
 #if DEBUG    
    Serial.println(color);
 #endif   

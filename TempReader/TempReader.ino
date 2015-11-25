@@ -1,17 +1,85 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include "DHT.h"
+// include the library code:
+#include <LiquidCrystal.h>
+
+
 
 // Data wire is plugged into port 2 on the Arduino
-#define ONE_WIRE_BUS 2
-
+#define DHT11PIN      14   // A0
+#define DS18B20PIN 15   // A1. This is then tied high to +ve with a 4.7k Resistor
+#define RELAYPIN      16   // A2
+ 
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
-OneWire oneWire(ONE_WIRE_BUS);
+OneWire oneWire(DS18B20PIN);
 
 // Pass our oneWire reference to Dallas Temperature. 
 DallasTemperature sensors(&oneWire);
 
 // arrays to hold device address
 DeviceAddress insideThermometer;
+
+
+// initialize the library with the numbers of the interface pins
+LiquidCrystal lcd(2,4, 9,10,11,12);
+
+DHT dht;
+
+byte Up[8] = {
+  0b00100,
+  0b01110,
+  0b10101,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b01010
+};
+
+byte Down[8] = {
+  0b01010,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b10101,
+  0b01110,
+  0b00100,
+};
+byte NOChange[8] = {
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000
+};
+
+byte relayOff[8] = {
+  0b11111,
+  0b10001,
+  0b10001,
+  0b10001,
+  0b10001,
+  0b10001,
+  0b10001,
+  0b11111
+};
+
+byte relayOn[8] = {
+  0b11111,
+  0b10001,
+  0b10101,
+  0b10101,
+  0b10101,
+  0b10101,
+  0b10001,
+  0b11111
+};
+
 
 void setup(void)
 {
@@ -26,36 +94,8 @@ void setup(void)
   Serial.print(sensors.getDeviceCount(), DEC);
   Serial.println(" devices.");
 
-  // report parasite power requirements
-  Serial.print("Parasite power is: "); 
-  if (sensors.isParasitePowerMode()) Serial.println("ON");
-  else Serial.println("OFF");
-  
-  // assign address manually.  the addresses below will beed to be changed
-  // to valid device addresses on your bus.  device address can be retrieved
-  // by using either oneWire.search(deviceAddress) or individually via
-  // sensors.getAddress(deviceAddress, index)
-  //insideThermometer = { 0x28, 0x1D, 0x39, 0x31, 0x2, 0x0, 0x0, 0xF0 };
-
-  // Method 1:
-  // search for devices on the bus and assign based on an index.  ideally,
-  // you would do this to initially discover addresses on the bus and then 
-  // use those addresses and manually assign them (see above) once you know 
-  // the devices on your bus (and assuming they don't change).
   if (!sensors.getAddress(insideThermometer, 0)) Serial.println("Unable to find address for Device 0"); 
   
-  // method 2: search()
-  // search() looks for the next device. Returns 1 if a new address has been
-  // returned. A zero might mean that the bus is shorted, there are no devices, 
-  // or you have already retrieved all of them.  It might be a good idea to 
-  // check the CRC to make sure you didn't get garbage.  The order is 
-  // deterministic. You will always get the same devices in the same order
-  //
-  // Must be called before search()
-  //oneWire.reset_search();
-  // assigns the first address found to insideThermometer
-  //if (!oneWire.search(insideThermometer)) Serial.println("Unable to find address for insideThermometer");
-
   // show the addresses we found on the bus
   Serial.print("Device 0 Address: ");
   printAddress(insideThermometer);
@@ -67,9 +107,24 @@ void setup(void)
   Serial.print("Device 0 Resolution: ");
   Serial.print(sensors.getResolution(insideThermometer), DEC); 
   Serial.println();
+  
+  lcd.begin(16, 2);
+  // Print a message to the LCD.
+  lcd.setCursor(0, 0);
+  lcd.print("Now:");
+  
+  lcd.createChar(0, NOChange);
+  lcd.createChar(1, Up);
+  lcd.createChar(2, Down);
+  
+  lcd.createChar(3, relayOn);
+  lcd.createChar(4, relayOff);
+  dht.setup(DHT11PIN); // data pin A0
+  
+  pinMode(RELAYPIN, OUTPUT);
+  digitalWrite(RELAYPIN, LOW);
+  
 }
-
-
 
 float maxT=-100.0;
 float minT = 100.0;
@@ -84,6 +139,7 @@ float getTemperature(DeviceAddress deviceAddress)
   
 }
 
+static int loopmode = 0;
 void loop(void)
 { 
   // call sensors.requestTemperatures() to issue a global temperature 
@@ -91,7 +147,31 @@ void loop(void)
   sensors.requestTemperatures(); // Send the command to get temperatures
   
   // It responds almost immediately. Let's print out the data
-  lastT = getTemperature(insideThermometer); // Use a simple function to print out the data
+  int arrowSymbol = 0;
+  int relaySymbol = 4;
+  boolean relayOn = false;
+  float thisT = getTemperature(insideThermometer); // Use a simple function to print out the data
+  
+  delay(dht.getMinimumSamplingPeriod());
+
+  float garageTmp = dht.getTemperature();
+  float humidity = dht.getHumidity();
+  
+  if (thisT > lastT) arrowSymbol = 1; // rising temp
+  else if (thisT < lastT) arrowSymbol = 2; // falling temp
+  lastT = thisT;
+  
+  if (thisT >-5.0)  // dunno if -5 is right, but it's a start 
+  {
+    relayOn = true;
+    relaySymbol = 3;
+    digitalWrite(RELAYPIN, HIGH);
+  }
+  else
+  {
+    relaySymbol = 4;
+    digitalWrite(RELAYPIN, LOW);
+  }
   
   if (lastT > maxT) maxT = lastT;
   if (lastT < minT) minT = lastT;
@@ -103,7 +183,46 @@ void loop(void)
   Serial.print("  Min C: ");
   Serial.println(minT);
   
-  delay(60000);
+  lcd.setCursor(5, 0);
+  lcd.print(String(lastT));
+  lcd.setCursor(15,0);
+  lcd.write(arrowSymbol);
+  
+  lcd.setCursor(0,1);
+  if (loopmode == 0)
+  {
+      lcd.print("Min:");
+      lcd.setCursor(5, 1);
+      lcd.print(String(minT));
+      loopmode = 1;
+  }
+  else if (loopmode== 1)
+  {
+      lcd.print("Max:");
+      lcd.setCursor(5, 1);
+      lcd.print(String(maxT));
+      loopmode = 2;
+  }
+  else if(loopmode == 2)
+  {
+    lcd.print("Amb:");
+      lcd.setCursor(5, 1);
+      lcd.print(String(garageTmp));
+      loopmode = 3;
+  }
+  else if(loopmode == 3)
+  {
+    lcd.print("Hum:");
+      lcd.setCursor(5, 1);
+      lcd.print(String(humidity));
+      loopmode = 0;
+  }
+
+  /* and show the relay symbol */
+    lcd.setCursor(15,1);
+    lcd.write(relaySymbol);
+  
+  delay(2000);
 }
 
 // function to print a device address

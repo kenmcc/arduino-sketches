@@ -1,9 +1,9 @@
 void Buzzer(byte NumBeep, int Period){
   for (byte i = 0; i < NumBeep; i++){
     #if ToneOnBuzzer == false
-      digitalWrite (Buzz, HIGH);
+      digitalHigh(BUZZER_PIN);
       delay (Period);
-      digitalWrite(Buzz, LOW);
+      digitalLow(BUZZER_PIN);
       delay(75);
     #elif ToneOnBuzzer == true
       tone(Buzz, 600, Period);
@@ -125,10 +125,10 @@ void CountDown(unsigned long Tempo, byte posX, byte posY, byte numH){
 
 // some seconds button press
 byte btn_Press (byte Button_press, int msTime){
-  if (digitalRead(Button_press)==0){
+  if (digitalState(Button_press)==0){
     delay (msTime);
-    if (digitalRead(Button_press)==0){
-      while(digitalRead(Button_press)==0){
+    if (digitalState(Button_press)==0){
+      while(digitalState(Button_press)==0){
       }
       return 1;
     }
@@ -138,7 +138,7 @@ byte btn_Press (byte Button_press, int msTime){
 
 // repeat button press
 byte btn_Repeat (byte Button_press){
-  if (digitalRead(Button_press)==0){
+  if (digitalState(Button_press)==0){
     delay(250);
     return 1;
   }
@@ -151,24 +151,24 @@ byte LeggiPulsante(byte& Verso, unsigned long& Timer ){
   
   boolean f_btnUp,f_btnDn;
   
-  if (digitalRead (Button_up)==0){	//Pressione specifica del pulsante UP
+  if (digitalState (Button_up)==0){	//Pressione specifica del pulsante UP
     if(Verso!=1)Timer=millis();		//Se non esiste pressione precedente parte il conteggio del tempo
     f_btnUp=true;
     Verso=1;		//Sentinella pulsante premuto
     delay(35);
   }else f_btnUp=false;
   
-  if (digitalRead (Button_dn)==0){	//Pressione specifica del pulsante UP
+  if (digitalState (Button_dn)==0){	//Pressione specifica del pulsante UP
     if(Verso!=2)Timer=millis();		//Se non esiste pressione precedente parte il conteggio del tempo
     f_btnDn=true;
     Verso=2;		//Sentinella pulsante premuto
     delay(35); 
   }else f_btnDn=false;
   
-  if(digitalRead (Button_up)==0)f_btnUp=true;	//Legge lo stato del pulsante allâ€™uscita per aggiornare il flag
+  if(digitalState (Button_up)==0)f_btnUp=true;	//Legge lo stato del pulsante allâ€™uscita per aggiornare il flag
   else f_btnUp=false;
   
-  if(digitalRead (Button_dn)==0)f_btnDn=true;	//Legge lo stato del pulsante allâ€™uscita per aggiornare il flag
+  if(digitalState (Button_dn)==0)f_btnDn=true;	//Legge lo stato del pulsante allâ€™uscita per aggiornare il flag
   else f_btnDn=false;
   	
   if(f_btnUp==false && f_btnDn==false)Verso=0;	//Confronta lo stato dei pulsanti per assegnare la NON pressione
@@ -206,10 +206,10 @@ int Set(int& Set, int Up, int Low, int Step, long Timer, byte Verso){
   	
   delay(35);
   if(Verso==1){
-    ControllaPulsante=digitalRead(Button_up);
+    ControllaPulsante=digitalState(Button_up);
   }
   if(Verso==2){
-    ControllaPulsante=digitalRead(Button_dn);
+    ControllaPulsante=digitalState(Button_dn);
   }
   
   if(ControllaPulsante==0 && Verso!=0){
@@ -237,10 +237,10 @@ float Set(float& Set, float Up, float Low, float Step, long Timer, byte Verso){
   	
   delay(35);
   if(Verso==1){
-    ControllaPulsante=digitalRead(Button_up);
+    ControllaPulsante=digitalState(Button_up);
   }
   if(Verso==2){
-    ControllaPulsante=digitalRead(Button_dn);
+    ControllaPulsante=digitalState(Button_dn);
   }
   
   if(ControllaPulsante==0 && Verso!=0){
@@ -268,10 +268,10 @@ byte Set(byte& Set, byte Up, byte Low, byte Step, long Timer, byte Verso){
   
   delay(35);
   if(Verso==1){
-    ControllaPulsante=digitalRead(Button_up);
+    ControllaPulsante=digitalState(Button_up);
   }
   if(Verso==2){
-    ControllaPulsante=digitalRead(Button_dn);
+    ControllaPulsante=digitalState(Button_dn);
   }
   
   if(ControllaPulsante==0 && Verso!=0){

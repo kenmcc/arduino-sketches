@@ -135,9 +135,9 @@ void saveRecipe(){
         NomeRicetta[pos]=97;
       }
     
-      if ((digitalRead(Button_dn)==0) && (digitalRead(Button_up)==0)){
+      if ((digitalState(Button_dn)==0) && (digitalState(Button_up)==0)){
         delay(350);
-        if ((digitalRead(Button_dn)==0) && (digitalRead(Button_up)==0)){
+        if ((digitalState(Button_dn)==0) && (digitalState(Button_up)==0)){
           for (byte j=pos; j<10; j++){
             NomeRicetta[pos]=32;
             pos++;

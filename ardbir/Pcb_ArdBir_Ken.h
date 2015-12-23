@@ -10,8 +10,12 @@ const char Button_enter = A1;
 const char Button_start = A0;
 
 // outputs
-const byte Pump = 6;
-const byte Buzz = 8;
-const byte Heat = 9;
+//const byte Pump = 6;
+//const byte Buzz = 8;
+//const byte Heat = 9;
+
+#define PUMP_PIN 6
+#define BUZZER_PIN 8
+#define HEAT_PIN 9
 
 

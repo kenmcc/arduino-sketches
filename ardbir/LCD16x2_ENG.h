@@ -94,7 +94,7 @@ void Version(byte locX, byte locY){
   lcd.setCursor(locX, locY);
   LCDSpace(1);
    showString(PSTR("2.8.3 "));
-  lcd.write(7);
+  //lcd.write(7);
 }
 
 void Intestazione(){  

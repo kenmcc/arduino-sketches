@@ -6,7 +6,7 @@ void scriviSprite(byte posX, byte posY){
   for(byte y=0; y<2; y++){
     for (byte x=0; x<3; x++){
       lcd.setCursor(posX+x,posY+y);
-      lcd.write(Count);
+      //lcd.write(Count);
       Count++;
     }
   }
@@ -15,6 +15,9 @@ void scriviSprite(byte posX, byte posY){
 }  
 
 void Presentazione(byte posX, byte posY){   
+}
+#if 0
+void Nothing(){
   /*
   // Arduino Symbol
   byte Arduino1[8] = {B00000, B00001, B00011, B00111, B01111, B01100, B11011, B10111};
@@ -94,6 +97,6 @@ void Presentazione(byte posX, byte posY){
   
 }
 
-
+#endif
 
 

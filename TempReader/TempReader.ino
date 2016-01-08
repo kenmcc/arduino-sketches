@@ -161,13 +161,13 @@ void loop(void)
   else if (thisT < lastT) arrowSymbol = 2; // falling temp
   lastT = thisT;
   
-  if (thisT >-5.0)  // dunno if -5 is right, but it's a start 
+  if (thisT >= -6.0)  // dunno if -5 is right, but it's a start 
   {
     relayOn = true;
     relaySymbol = 3;
     digitalWrite(RELAYPIN, HIGH);
   }
-  else
+  else if(thisT < -8.0)
   {
     relaySymbol = 4;
     digitalWrite(RELAYPIN, LOW);

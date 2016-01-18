@@ -9,7 +9,8 @@
 // 1 Brauduino Original (Matho's PCB)
 // 2 Brauduino by DanielXan
 // 3 ArdBir by DanielXan
-#define PCBType 3
+// 4 kens board
+#define PCBType 4
 
 // SET LCD and Language
 // LCD 16 or 20
@@ -254,6 +255,8 @@ EEPROM MAP
 #elif PCBType == 3 
   #include "Pcb_ArdBir_DanielXan.h"
 #elif PCBType == 4 
+  #include "board_ken.h"
+#else
   #include "Pcb_11s.h"
 #endif
 

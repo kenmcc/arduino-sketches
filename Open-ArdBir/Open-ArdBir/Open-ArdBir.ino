@@ -340,7 +340,7 @@ byte ScaleTemp       = EEPROM.read(10);;
 byte SensorType      = EEPROM.read(11);;
 byte UseGAS          = EEPROM.read( 0);
 
-byte stageTime;
+int stageTime;
 byte hopTime;
 byte mainMenu        = 0;
 byte pumpTime           ;
@@ -634,7 +634,7 @@ boolean wait_for_confirm (byte Stato, byte Tipo, byte Display) {
   
   byte Attesa   = 0;
   
-  Buzzer(1, 750);
+  Buzzer(1, 100);
   
   while (wtBtn) {                             // wait for comfirmation 
     Temperature();
@@ -1282,7 +1282,7 @@ void WaitStart() {
     ImpostaTempo(stageTime);
     LeggiPulsante(Verso, Timer);
     
-    Set((stageTime), 1440, 15, 15, Timer, Verso);
+    Set((stageTime), 12*60, 1, 1, Timer, Verso);
     
     if (btn_Press(Button_enter, 50)) Procedo = false;
     

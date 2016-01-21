@@ -213,9 +213,9 @@ int Set(int& Set, int Up, int Low, int Step, long Timer, byte Verso){
   }
   
   if(ControllaPulsante==0 && Verso!=0){
-    if(((millis()-Timer)/1000)>=4)step_size=(Step*10);
+    if(((millis()-Timer)/1000)>=15)step_size=(Step*10);
     else{
-      if(((millis()-Timer)/1000)>=2)step_size=(Step*5);
+      if(((millis()-Timer)/1000)>=10)step_size=(Step*5);
       else step_size=Step;
     }
     if(Verso==1){    

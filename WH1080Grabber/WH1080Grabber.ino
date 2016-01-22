@@ -27,7 +27,7 @@
 // EOC is not used, it signifies an end of conversion
 // XCLR is a reset pin, also not used here
 
-#include <JeeLib.h>
+//#include <JeeLib.h>
 //#include <Wire.h>
 //#include <Adafruit_BMP085.h>
 
@@ -63,6 +63,7 @@ int __debug = 1; // set to enable debug mode
  
  
  static void rfwrite(){
+   return;
   #ifdef USE_ACK
    for (byte i = 0; i <= RETRY_LIMIT; ++i) {  // tx and wait for ack up to RETRY_LIMIT times
      rf12_sleep(-1);              // Wake up RF module
@@ -77,13 +78,13 @@ int __debug = 1; // set to enable debug mode
    Sleepy::loseSomeTime(RETRY_PERIOD * 1000);     // If no ack received wait and try again
    }
   #else
-     rf12_sleep(-1);              // Wake up RF module
-     while (!rf12_canSend())
-     rf12_recvDone();
+ //    rf12_sleep(-1);              // Wake up RF module
+  //   while (!rf12_canSend())
+ //    rf12_recvDone();
      Serial.write("sendStart\n");
-     rf12_sendStart(0, &tinytx, sizeof tinytx); 
-     rf12_sendWait(2);           // Wait for RF to finish sending while in standby mode
-     rf12_sleep(0);              // Put RF module to sleep
+  //   rf12_sendStart(0, &tinytx, sizeof tinytx); 
+ //    rf12_sendWait(2);           // Wait for RF to finish sending while in standby mode
+ //    rf12_sleep(0);              // Put RF module to sleep
      return;
   #endif
  }
@@ -121,6 +122,7 @@ ISR(PCINT0_vect)
     if (pulse_433 > 3000) {// reset pulse stream and counter
       state = 0;
       pulse_433 = 0;
+      Serial.println("...");
       
     }
   }
@@ -138,16 +140,16 @@ void setup()
     pinMode(PIN_433, INPUT);
     digitalWrite(PIN_433, 1);   // pull-up
     
-  rf12_initialize(myNodeID,freq,network); // Initialize RFM12 with settings defined above 
-  rf12_control(0xC623);
-  rf12_sleep(0);                          // Put the RFM12 to sleep
+ // rf12_initialize(myNodeID,freq,network); // Initialize RFM12 with settings defined above 
+//  rf12_control(0xC623);
+ // rf12_sleep(0);                          // Put the RFM12 to sleep
 
 //    Serial.println("Just before rf12_init_OOK()");
     //rf12_init_OOK();//set up RF12
 //    Serial.println("RFM12B set up for 433MHz OOK");
     if (__debug) {Serial.println("Debug mode");}
     // interrupt on pin change
-cli();
+//cli();
 #if defined(__AVR_ATtiny84__)
 
   PCMSK0 = 0b00000001;     // PCINT1 and PCINT2  (pin 12 and 11)
@@ -157,15 +159,16 @@ cli();
   digitalWrite(8, 1);
 
 #else
-    bitSet(PCMSK2, PIN_433);
+   bitSet(PCMSK2, PIN_433);
     bitSet(PCICR, PCIE2);
 #endif    
-    sei();
+   // sei();
     Serial.println("Interrupts set up");
   }
 
 void loop()
   {
+    
     byte i;
     unsigned long now;
   
@@ -224,6 +227,7 @@ void loop()
 
 static void rf12_init_OOK() 
 {
+  #if 0
     rf12_initialize(0, RF12_433MHZ);
     rf12_control(0x8017); // 8027    433 Mhz;disabel tx register; disable RX
     rf12_control(0x82c0); // 82C0    enable receiver; enable basebandblock 
@@ -238,6 +242,7 @@ static void rf12_init_OOK()
     rf12_control(0xB800); // TX register write command not used
     rf12_control(0xC800); // disable low dutycycle 
     rf12_control(0xC040); // 1.66MHz,2.2V not used see 82c0  
+    #endif
     return;
 }
 

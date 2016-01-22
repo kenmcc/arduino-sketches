@@ -127,7 +127,7 @@ void Menu_2(){
 }
 void AddMalt(){
   lcd.setCursor(2,2);
-  lcd.print(F("    Add Malt    "));
+  lcd.print(F("  Malt Added?   "));
 
   LCD_Procedo();
 }

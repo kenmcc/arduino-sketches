@@ -1,5 +1,6 @@
 
 #include <ESP8266WiFi.h>
+
 #include <WiFiUdp.h>
 #include <Adafruit_NeoPixel.h>
 #include "TweetingCheerLightsPrivate.h"
@@ -18,16 +19,16 @@ struct colormap{
 colormap myColorMap[] = {
     {"red", {0xFF,0x00,0x00}},
     {"green", {0x00, 0x80, 0x00}},
-    {"blue", {0x00, 0x00, 0xFF}},
-    {"cyan", {0x00, 0xFF, 0xFF}},
-    {"white", {0xFF, 0xFF, 0xFF}},
-    {"oldlace",{0xFD, 0xF5, 0xE6}},
-    {"warmwhite",{0xFD, 0xF5, 0xE6}},
-    {"purple", {0x80, 0x00, 0x80}},
-    {"magenta", {0xFF, 0x00, 0xFF}},
-    {"yellow", {0xFF, 0xFF, 0x00}},
     {"orange", {0xFF, 0xA5, 0x00}},
-    {"pink", {0xFF, 0x70, 0xFF}}
+    {"blue", {0x00, 0x00, 0xFF}},
+    {"purple", {0x80, 0x00, 0x80}},
+    {"white", {0xFF, 0xFF, 0xFF}},
+    {"magenta", {0xFF, 0x00, 0xFF}},
+    {"cyan", {0x00, 0xFF, 0xFF}},
+    {"yellow", {0xFF, 0xFF, 0x00}},
+    {"pink", {0xFF, 0x70, 0xFF}}, 
+    {"oldlace",{0xFD, 0xF5, 0xE6}},
+     {"warmwhite",{0xFD, 0xF5, 0xE6}},
 };
 
 
@@ -350,6 +351,11 @@ void postToTwitter()
 		client.print("&status=");
 		client.println(msg);
   }
+  else
+  {
+    Serial.println("Failed to connet to twitter");
+    software_Reset();
+  }
   
 }
 
@@ -378,6 +384,11 @@ void postWakeUpToTwitter()
 		client.print(token);
 		client.print("&status=");
 		client.println(msg);
+  }
+   else
+  {
+    Serial.println("Failed to connet to twitter");
+    software_Reset();
   }
 }
 static int timerLoop = 0;
@@ -492,7 +503,30 @@ unsigned long sendNTPpacket(IPAddress& address)
   udp.endPacket();
 }
 */
+
 void getRecentColors(void)
+{
+  for (int x = 0; x < NUMPIXELS; x++)
+ {
+  String color= myColorMap[x].color;
+#if DEBUG    
+   Serial.println(color);
+#endif   
+   getRGBFromColorMap(color, currentcolors[x]);
+     
+   if (x == 0)
+   {
+     color.toLowerCase();
+     currentColorString = color;
+   }
+ } 
+ 
+ 
+ updatePixels();
+ 
+}
+
+void reallygetRecentColors(void)
 {
 WiFiClient thingspeakClient;
   const int httpPort = 80;

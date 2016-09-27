@@ -5,3 +5,22 @@ Connect GPIOZero to ground while powering on to enable boot mode.
 
 Using arduino, select USBtinyISP as the programmer, and the correct serial port
 Occasionally get an "espcomm_open failed" message, try to power it on again.
+
+
+Now using the wee board and the cp2012, connect it up, slide the prog jumper down, then the power
+
+upload using 'paralell programmer'
+
+For RFID stuff, 
+https://github.com/Jorgen-VikingGod/ESP8266-MFRC522#libraries
+
+and the following mapping works ok with the ESP
+
+MISO - GPIO12 (hw spi)
+MOSI - GPIO13 (hw spi)
+SCK  - GPIO14 (hw spi)
+SS   - GPIO02 (free GPIO)
+RST  - GPIO05 (free GPIO)
+
+plus ground and vcc (3.3v)
+

@@ -75,7 +75,7 @@ int boredomTime = 0;
 /***************************************** SETUP *******************************/
 void setup() 
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
   delay(10);
 
   // We start by connecting to a WiFi network
@@ -131,6 +131,10 @@ void loop()
       Serial.print(F("Card UID:"));
       dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
       Serial.println();
+      rgb[0] = mfrc522.uid.uidByte[0];
+      rgb[1] = mfrc522.uid.uidByte[1];
+      rgb[2] = mfrc522.uid.uidByte[2];
+      
       }
   }
   

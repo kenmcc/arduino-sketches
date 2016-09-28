@@ -17,8 +17,8 @@
 #endif
 
 
-const char* ssid     = "S3AIR";
-const char* password = "LovinglyDelig";
+const char* ssid     = "ibcroutervpn2_5GHz";
+const char* password = "S3demos-wifi";
 
 const char* host = "api.thingspeak.com";
 const char* streamId   = "/channels/1417/field/2/last.json";
@@ -29,7 +29,7 @@ const char* textStreamId   = "/channels/1417/field/1/last.json";
 #define PIN            4
 
 // How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS     1
+#define NUMPIXELS     8
 
 // When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
 // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
@@ -62,10 +62,10 @@ char timeString[20] = "";
 char currentColorString[15] = "";
 
 int boredomTime = 0;
-#define BOREDMIN 5
+#define BOREDMIN 3
 #define BOREDMAX 10
 
-#define DELAYLOOP 15000 // 15 seconds
+#define DELAYLOOP (20 * 1000) // in seconds
 
 /***************************************** SETUP *******************************/
 void setup() 
@@ -103,6 +103,7 @@ void setup()
 
 
 /********************** LOOP ******************************/
+unsigned long lastFoundSeconds = 0;
 void loop() 
 {
   unsigned long now =getCurrentTime(timeString);
@@ -121,12 +122,13 @@ void loop()
    // capture the values and the time....
   if (rgb[0] != currentcolors[0] || rgb[1] != currentcolors[1] || rgb[2] != currentcolors[2])
   {
-    Serial.print("Wheeee new colours, bored again in "); Serial.print(boredomTime); Serial.println(" Minutes");
      // we've got a new set of colours.
       currentcolors[0] = rgb[0];
       currentcolors[1] = rgb[1];
       currentcolors[2] = rgb[2];
      timeOfColorChange = now;
+     boredomTime = random(BOREDMIN,BOREDMAX);
+    Serial.print("Wheeee new colours, bored again in "); Serial.print(boredomTime); Serial.println(" Minutes");
   }
   else
   {
@@ -242,7 +244,7 @@ String getColorString(String input)
   input.toUpperCase();
   int s =  input.indexOf("FIELD1") + 9;
   String color = input.substring(s);
-    Serial.println(  color);
+  //  Serial.println(  color);
   int end = color.indexOf("\"");
   color = color.substring(0, end);
   Serial.print("NOW THE COLOR IS ");
@@ -274,13 +276,15 @@ void postToTwitter()
   int rndCol = random(10);
   while (theCurrentColorString.compareTo(colors[rndCol]) == 0)
   {
-    Serial.print("already is ");
-    Serial.println(colors[rndCol]);
+    //Serial.print("already is ");
+    //Serial.println(colors[rndCol]);
     rndCol = random(10);
   }
+
+  Serial.print("Going to ask for it to be changed to ");Serial.println(colors[rndCol]);
   
   memset(msg, 0, 128);
-  snprintf(msg, 128, "@cheerlights, I'm a bored ESP8266. It's %s and I want the %s lights. I'll be bored again in %d minutes", timeString, colors[rndCol].c_str(), boredomTime);
+  snprintf(msg, 128, "@cheerlights, I'm bored, it's %s in Dublin.ie, I want %s lights. I'll be bored again in %d mins, entertain me.", timeString, colors[rndCol].c_str(), boredomTime);
   
     
   Serial.print("Trying to twat"); 
@@ -306,12 +310,14 @@ unsigned long getCurrentTime(char* timeString)
 
     sendNTPpacket(timeServerIP); // send an NTP packet to a time server
   // wait to see if a reply is available
-  delay(2000);
-  
+  delay(500);
+
+  unsigned long secsSince1900;
+  bool estimate = false;
   int cb = udp.parsePacket();
   if (!cb) {
-    Serial.println("no packet yet");
-    return 0;
+    secsSince1900 = lastFoundSeconds+(DELAYLOOP/1000);
+    estimate = true;
   }
   else {
     // We've received a packet, read the data from it
@@ -324,7 +330,8 @@ unsigned long getCurrentTime(char* timeString)
     unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
     // combine the four bytes (two words) into a long integer
     // this is NTP time (seconds since Jan 1 1900):
-    unsigned long secsSince1900 = highWord << 16 | lowWord;
+    secsSince1900 = highWord << 16 | lowWord;
+  }
     
     // now convert NTP time into everyday time:
     // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
@@ -338,21 +345,23 @@ unsigned long getCurrentTime(char* timeString)
     m = (epoch  % 3600) / 60;
     s = (epoch%60);
 
-    sprintf(timeString, "%02d:%02d:%02d", h, m, s);
+    sprintf(timeString, "%02d:%02d", h+1, m);
 
     // print the hour, minute and second:
+    if (estimate) Serial.print("*");
+    else Serial.print(" ");
     Serial.print("The UTC time is ");       // UTC is the time at Greenwich Meridian (GMT)
     Serial.println(timeString); // print the second
-    
+    lastFoundSeconds = secsSince1900;
     return secsSince1900;
-  }
+  
   return 0;
 }
 
 // send an NTP request to the time server at the given address
 unsigned long sendNTPpacket(IPAddress& address)
 {
-  Serial.println("sending NTP packet...");
+  //Serial.println("sending NTP packet...");
   // set all bytes in the buffer to 0
   memset(packetBuffer, 0, NTP_PACKET_SIZE);
   // Initialize values needed to form NTP request

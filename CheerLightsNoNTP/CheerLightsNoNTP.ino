@@ -111,7 +111,7 @@ void loop()
       currentcolors[2] = rgb[2];
      timeOfColorChange = now;
      boredomTime = random(BOREDMIN,BOREDMAX);
-    Serial.print("Wheeee new colours "); Serial.print(". bored again in "); Serial.print(boredomTime); Serial.println(" Minutes");
+    Serial.print("Wheeee new colours, bored again in "); Serial.print(boredomTime); Serial.println(" Minutes");
   }
   else
   {
@@ -135,7 +135,7 @@ unsigned long askForTime()
   bool estimate = false;
   // Use WiFiClient class to create TCP connections
   if (!client.connect(timehost, httpPort)) {
-    Serial.println("connection failed");
+    Serial.println("connection failed, estimating the time now");
     estimate = true;
     epoch =  lastFoundSeconds+(DELAYLOOP/1000);
   }
@@ -164,7 +164,7 @@ unsigned long askForTime()
         }
         else
         {
-          Serial.println("Found Date!");
+          /* we have found the ecclock bit, so away we go..... */
           break;
         }
       }

@@ -77,7 +77,7 @@ void setup()
   
   pixels.begin(); // This initializes the NeoPixel library.
 
-  randomSeed(analogRead(0));
+  randomSeed(askForTime() & 0xFFFF);
   boredomTime = random(BOREDMIN,BOREDMAX);
   Serial.print("Boredom initially set to " );
   Serial.println(boredomTime);
@@ -91,10 +91,20 @@ unsigned long lastFoundSeconds = 0;
 void loop() 
 {
   unsigned long now = askForTime();
-  int rgb[3] = {0,0,0};                           //define rgb pointer for ws2812
+  int rgb[3] = {100,200,0};                           //define rgb pointer for ws2812
+  
   String rgbStr = askThingSpeak();
-  rgbStr.replace("%23","#");
-  getRGB(rgbStr,rgb);  
+  if(rgbStr != "")
+  {
+    rgbStr.replace("%23","#");
+    getRGB(rgbStr,rgb);  
+  }
+  else
+  {
+    rgb[0] = currentcolors[0] ;
+    rgb[1] = currentcolors[1] ;  
+    rgb[2] = currentcolors[2] ;  
+  }
   
   for(int i=0;i<NUMPIXELS;i++){
 
@@ -110,7 +120,7 @@ void loop()
       currentcolors[1] = rgb[1];
       currentcolors[2] = rgb[2];
      timeOfColorChange = now;
-     boredomTime = random(BOREDMIN,BOREDMAX);
+     //boredomTime = random(BOREDMIN,BOREDMAX);
     Serial.print("Wheeee new colours, bored again in "); Serial.print(boredomTime); Serial.println(" Minutes");
   }
   else
@@ -178,6 +188,11 @@ unsigned long askForTime()
     dateStr.remove(Pos);
     
     epoch = dateStr.toInt();
+    if (epoch < lastFoundSeconds)
+    {
+      estimate = true;
+      epoch =  lastFoundSeconds+(DELAYLOOP/1000); 
+    }
   }
   int h, m, s;
   h = (epoch  % 86400L) / 3600;
@@ -202,7 +217,7 @@ String askThingSpeak()
 
   // Use WiFiClient class to create TCP connections
   if (!client.connect(host, httpPort)) {
-    Serial.println("connection failed");
+    Serial.println("connection failed asking for the colors.");
   
     return "";
   }
@@ -340,7 +355,7 @@ void postToTwitter()
   Serial.print("Going to ask for it to be changed to ");Serial.println(colors[rndCol]);
   
   memset(msg, 0, 128);
-  snprintf(msg, 128, "@cheerlights, I'm bored, it's %s in Dublin.ie, I want %s lights. I'll be bored again in %d mins, entertain me.", timeString, colors[rndCol].c_str(), boredomTime);
+  snprintf(msg, 128, "#cheerlights, I'm bored at %s in Dub.ie, gimme %s lights. I'll be bored again in %d mins. %X", timeString, colors[rndCol].c_str(), boredomTime, timeOfColorChange);
   
     
   Serial.print("Trying to twat"); 

@@ -48,12 +48,32 @@ int currentcolors[3] = {-1,-1,-1};
 unsigned long timeOfColorChange = 0;
 char timeString[20] = "";
 char currentColorString[15] = "";
+String lastColorString = "black";
 
 int boredomTime = 0;
 #define BOREDMIN 3
 #define BOREDMAX 10
 
 #define DELAYLOOP (20 * 1000) // in seconds
+
+typedef struct colorBlob{
+  char* colorName;
+  char rgb[3];
+};
+
+colorBlob theColors[]= {
+  {"red", {0xFF,0,0}},
+  {"green",{00, 0x80, 00}},
+  {"blue", {00, 00, 0xFF}},
+  {"cyan", {00,0xFF, 0xFF}},
+  {"white", {0xFF, 0xFF, 0xFF}},
+  {"warmwhite", {0xFD, 0xF5, 0xE6}},
+  {"purple", {0x80, 0x00, 0x80}},
+  {"magenta", {0xFF, 0x00, 0xFF}},
+  {"yellow", {0xFF, 0xFF, 0x00}},
+  {"orange", {0xFF, 0xA5, 0x00}},
+  {"pink", {0xFF, 0xA0, 0xAB}},
+};
 
 /***************************************** SETUP *******************************/
 void setup() 
@@ -91,8 +111,8 @@ unsigned long lastFoundSeconds = 0;
 void loop() 
 {
   unsigned long now = askForTime();
-  int rgb[3] = {100,200,0};                           //define rgb pointer for ws2812
-  
+  int rgb[3] = {currentcolors[0],currentcolors[1],currentcolors[2]};                           //define rgb pointer for ws2812
+  /*
   String rgbStr = askThingSpeak();
   if(rgbStr != "")
   {
@@ -105,29 +125,55 @@ void loop()
     rgb[1] = currentcolors[1] ;  
     rgb[2] = currentcolors[2] ;  
   }
-  
-  for(int i=0;i<NUMPIXELS;i++){
-
-    // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-    pixels.setPixelColor(i, pixels.Color(rgb[0], rgb[1], rgb[2])); // Moderately bright green color.
-  }
-  pixels.show(); // This sends the updated pixel color to the hardware.
-   // capture the values and the time....
-  if (rgb[0] != currentcolors[0] || rgb[1] != currentcolors[1] || rgb[2] != currentcolors[2])
+  */
+  String colorString = getColorString();
+  if(colorString != lastColorString)
   {
-     // we've got a new set of colours.
+    Serial.print("Color is now ");Serial.println(colorString);
+    for (int c = 0; c < 11; c++)
+    {
+      if (String(theColors[c].colorName) == colorString)
+      {
+        Serial.print("Found color ");Serial.print(theColors[c].colorName);
+        for (int d = 0; d < 3; d++)
+        {
+          rgb[d] = theColors[c].rgb[d];
+          Serial.print(" "); Serial.print( rgb[d], HEX);
+        }
+        Serial.println("");
+        break;
+      }
+    }
+  
+     // capture the values and the time....
+    if (rgb[0] != currentcolors[0] || rgb[1] != currentcolors[1] || rgb[2] != currentcolors[2])
+    {
+      for(int i=0;i<NUMPIXELS;i++){
+        // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
+          pixels.setPixelColor(i, pixels.Color(rgb[0], rgb[1], rgb[2])); // Moderately bright green color.
+      }
+      
+      pixels.show(); // This sends the updated pixel color to the hardware.
+      // we've got a new set of colours.
       currentcolors[0] = rgb[0];
       currentcolors[1] = rgb[1];
       currentcolors[2] = rgb[2];
-     timeOfColorChange = now;
-     //boredomTime = random(BOREDMIN,BOREDMAX);
-    Serial.print("Wheeee new colours, bored again in "); Serial.print(boredomTime); Serial.println(" Minutes");
+      timeOfColorChange = now;
+      lastColorString = colorString; 
+      Serial.print("Wheeee new colours, bored again in "); Serial.print(boredomTime); Serial.println(" Minutes");
+    }
   }
   else
   {
+    //Serial.print("Color hasn't changed from "); Serial.println(lastColorString);
     if ((now - timeOfColorChange) > boredomTime * 60)
     {
-      boredomTime = random(BOREDMIN,BOREDMAX);
+      int newboredomTime = random(BOREDMIN,BOREDMAX);
+      while (newboredomTime == boredomTime)
+      {
+        newboredomTime = random(BOREDMIN,BOREDMAX);
+      }
+      boredomTime = newboredomTime;
       Serial.print("BORED, setting to new boredom time of ");
       Serial.println(boredomTime);
       postToTwitter();
@@ -310,17 +356,16 @@ void getRGB(String hexRGB, int *rgb) {
   //Serial.print("Converting string "); Serial.print(hexRGB); Serial.print(rgb[0], HEX); Serial.print(rgb[1], HEX); Serial.println(rgb[2], HEX);
 }
 
-String getColorString(String input)
+String getColorString()
 {
+  String input = askThingSpeakString();
   input.toUpperCase();
   int s =  input.indexOf("FIELD1") + 9;
   String color = input.substring(s);
   //  Serial.println(  color);
   int end = color.indexOf("\"");
   color = color.substring(0, end);
-  Serial.print("NOW THE COLOR IS ");
-  Serial.println(  color);
-   color.toLowerCase();
+  color.toLowerCase();
    return color;
 }
 
@@ -337,8 +382,7 @@ int convertToInt(char upper,char lower)
 
 void postToTwitter()
 {
-  String currentColorStringRaw = askThingSpeakString();
-  String theCurrentColorString = getColorString(currentColorStringRaw);
+  String theCurrentColorString = getColorString();
   
    WiFiClient client;
   const int httpPort = 80;

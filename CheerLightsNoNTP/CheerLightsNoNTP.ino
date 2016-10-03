@@ -51,8 +51,8 @@ char currentColorString[15] = "";
 String lastColorString = "black";
 
 int boredomTime = 0;
-#define BOREDMIN 3
-#define BOREDMAX 10
+#define BOREDMIN 5
+#define BOREDMAX 15
 
 #define DELAYLOOP (20 * 1000) // in seconds
 
@@ -193,10 +193,10 @@ unsigned long askForTime()
   if (!client.connect(timehost, httpPort)) {
     Serial.println("connection failed, estimating the time now");
     estimate = true;
-    epoch =  lastFoundSeconds+(DELAYLOOP/1000);
   }
   else
   {
+    Serial.println("OK, found a client connection, going to go and ask for the date");
     String url = "/";
     
     // This will send the request to the server
@@ -204,7 +204,7 @@ unsigned long askForTime()
                  "Host: " + timehost + "\r\n" + 
                  "Connection: close\r\n\r\n");
   
-    delay(500);
+    delay(1000);
     String dateStr = "";
     bool begin = false;
     // Read all the lines of the reply from server and print them to Serial
@@ -228,16 +228,36 @@ unsigned long askForTime()
     }
     /* remove the crud before the value */
     int Pos = dateStr.indexOf('">')+1;
-    dateStr.remove(0, Pos);
-    /* and after the value */ 
-    Pos = dateStr.indexOf("</div");
-    dateStr.remove(Pos);
-    
+    if (Pos == -1)
+    {
+      estimate = true;
+      Serial.println("Didn't receive the right amount of data to strip the end");
+    }
+    else
+    {
+      dateStr.remove(0, Pos);
+      /* and after the value */ 
+      Pos = dateStr.indexOf("</div");
+      if (Pos == -1)
+      {
+        estimate=true;
+        Serial.println("Didn't find the end of the string");
+        
+      }
+      else
+      {
+        dateStr.remove(Pos);
+      }
+    }
+    if (estimate)
+    {
+      epoch =  lastFoundSeconds+(DELAYLOOP/1000); 
+    }
     epoch = dateStr.toInt();
     if (epoch < lastFoundSeconds)
     {
       estimate = true;
-      epoch =  lastFoundSeconds+(DELAYLOOP/1000); 
+      epoch =  lastFoundSeconds+(DELAYLOOP/1000);
     }
   }
   int h, m, s;

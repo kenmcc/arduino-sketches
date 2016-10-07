@@ -110,22 +110,10 @@ void setup()
 unsigned long lastFoundSeconds = 0;
 void loop() 
 {
+  Serial.println(">");
   unsigned long now = askForTime();
   int rgb[3] = {currentcolors[0],currentcolors[1],currentcolors[2]};                           //define rgb pointer for ws2812
-  /*
-  String rgbStr = askThingSpeak();
-  if(rgbStr != "")
-  {
-    rgbStr.replace("%23","#");
-    getRGB(rgbStr,rgb);  
-  }
-  else
-  {
-    rgb[0] = currentcolors[0] ;
-    rgb[1] = currentcolors[1] ;  
-    rgb[2] = currentcolors[2] ;  
-  }
-  */
+ 
   String colorString = getColorString();
   if(colorString != lastColorString)
   {
@@ -212,7 +200,7 @@ unsigned long askForTime()
     {
       char in = client.read();
       dateStr += (in);
-      if (dateStr.length() >=30)
+      if (dateStr.length() >=40)
       {
         if (!dateStr.startsWith("ecclock"))
         {
@@ -231,7 +219,7 @@ unsigned long askForTime()
     if (Pos == -1)
     {
       estimate = true;
-      Serial.println("Didn't receive the right amount of data to strip the end");
+      Serial.println("Didn't receive the right amount of data to strip the end, will estimate");
     }
     else
     {
@@ -247,19 +235,20 @@ unsigned long askForTime()
       else
       {
         dateStr.remove(Pos);
+        epoch = dateStr.toInt();
       }
     }
-    if (estimate)
-    {
-      epoch =  lastFoundSeconds+(DELAYLOOP/1000); 
-    }
-    epoch = dateStr.toInt();
-    if (epoch < lastFoundSeconds)
-    {
-      estimate = true;
-      epoch =  lastFoundSeconds+(DELAYLOOP/1000);
-    }
   }
+  if (estimate)
+  {
+    epoch =  lastFoundSeconds+(DELAYLOOP/1000); 
+  }
+  if (epoch < lastFoundSeconds)
+  {
+    estimate = true;
+    epoch =  lastFoundSeconds+(DELAYLOOP/1000);
+  }
+
   int h, m, s;
   h = (epoch  % 86400L) / 3600;
   m = (epoch  % 3600) / 60;
@@ -278,6 +267,7 @@ unsigned long askForTime()
 
 String askThingSpeak()
 {
+  Serial.println("Asking for the current colors");
   WiFiClient client;
   const int httpPort = 80;
 
@@ -297,21 +287,23 @@ String askThingSpeak()
   client.print(String("GET ") + url + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" + 
                "Connection: close\r\n\r\n");
-  delay(10);
+  delay(1000);
   String rgbStr = "";
   bool begin = false;
   // Read all the lines of the reply from server and print them to Serial
-  while(client.available() || !begin )
+  while(client.available())// || !begin )
   {
     char in = client.read();
     if (in == '{') 
     {
-        begin = true;
+      Serial.println("Found start of string, begin");
+      begin = true;
     }
     if (begin) rgbStr += (in);
     if (in == '}') 
     {
-        break;
+      Serial.println("Found end of string, break");
+      break;
     }
    delay(1);
   }
@@ -340,21 +332,30 @@ String askThingSpeakString()
   client.print(String("GET ") + url + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" + 
                "Connection: close\r\n\r\n");
-  delay(10);
+  delay(1000);
   String rgbStr = "";
   bool begin = false;
+  int charsRead = 0;
   // Read all the lines of the reply from server and print them to Serial
-  while(client.available() || !begin )
+  while(client.available())// || !begin )
   {
     char in = client.read();
+    charsRead += 1;
     if (in == '{') 
     {
         begin = true;
+        Serial.println("Found start of string, begin");
     }
     if (begin) rgbStr += (in);
     if (in == '}') 
     {
-        break;
+      Serial.println("Found end of string, break");
+      break;
+    }
+    if (charsRead >= 10000)
+    {
+      Serial.println("Failed to find the end in 10000chars, bailing"); 
+      break;
     }
    delay(1);
   }

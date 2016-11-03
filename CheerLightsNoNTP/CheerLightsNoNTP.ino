@@ -42,7 +42,7 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ80
 const char* token="4059494159-aI1CkCcDOsAPTek1yAt4c5A3hcyd5UrffHapXaJ";
 char msg[128] = "";
 
-
+ADC_MODE(ADC_VCC);
 
 int currentcolors[3] = {-1,-1,-1};
 unsigned long timeOfColorChange = 0;
@@ -110,7 +110,7 @@ void setup()
 unsigned long lastFoundSeconds = 0;
 void loop() 
 {
-  Serial.println(">");
+  Serial.print(">"); Serial.print(ESP.getVcc()/1000.0);Serial.println("<");
   unsigned long now = askForTime();
   int rgb[3] = {currentcolors[0],currentcolors[1],currentcolors[2]};                           //define rgb pointer for ws2812
  
@@ -149,6 +149,7 @@ void loop()
       timeOfColorChange = now;
       lastColorString = colorString; 
       Serial.print("Wheeee new colours, bored again in "); Serial.print(boredomTime); Serial.println(" Minutes");
+      tellTwitter();
     }
   }
   else
@@ -400,6 +401,34 @@ int convertToInt(char upper,char lower)
   return uVal + lVal;
 }
 
+
+void tellTwitter()
+{
+  String theCurrentColorString = getColorString();
+  
+   WiFiClient client;
+  const int httpPort = 80;
+  
+    
+  memset(msg, 0, 128);
+  snprintf(msg, 128, "Yay, someone has pushed the lights to %s. That should keep me going for %d mins. %X", theCurrentColorString.c_str(), boredomTime, timeOfColorChange);
+  
+  if (client.connect(LIB_DOMAIN, 80))
+  {
+    client.println("POST http://" LIB_DOMAIN "/update HTTP/1.0");
+    client.print("Content-Length: ");
+    client.println(strlen(msg)+strlen(token)+14);
+    client.println();
+    client.print("token=");
+    client.print(token);
+    client.print("&status=");
+    client.println(msg);
+  }
+  else
+  {
+    Serial.println("ARGH FAILED TO POST TO TWITTER");
+  }
+}
 
 void postToTwitter()
 {

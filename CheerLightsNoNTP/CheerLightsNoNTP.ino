@@ -11,13 +11,13 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <Adafruit_NeoPixel.h>
+#include "wifi.h"
 
 #ifdef __AVR__
   #include <avr/power.h>
 #endif
 
-const char* ssid     = "ibcroutervpn2_5GHz";
-const char* password = "S3demos-wifi";
+
 
 const char* host = "api.thingspeak.com";
 const char* streamId   = "/channels/1417/field/2/last.json";
@@ -54,6 +54,8 @@ int boredomTime = 0;
 #define BOREDMIN 5
 #define BOREDMAX 15
 
+
+
 #define DELAYLOOP (20 * 1000) // in seconds
 
 typedef struct colorBlob{
@@ -80,6 +82,14 @@ void setup()
 {
   Serial.begin(115200);
   delay(10);
+  pixels.begin(); // This initializes the NeoPixel library.
+  Serial.print("\n\nSetting up pixels\n\n ");
+  for(int i=0;i<NUMPIXELS;i++){
+   // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
+    pixels.setPixelColor(i, pixels.Color(255, 0, 0)); // Moderately bright green color.
+  }
+  pixels.show();
+
  // We start by connecting to a WiFi network
   Serial.print("Connecting to ");
   Serial.println(ssid);
@@ -95,12 +105,13 @@ void setup()
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
   
-  pixels.begin(); // This initializes the NeoPixel library.
-
+  
   randomSeed(askForTime() & 0xFFFF);
   boredomTime = random(BOREDMIN,BOREDMAX);
   Serial.print("Boredom initially set to " );
   Serial.println(boredomTime);
+
+ 
 }
 
 
@@ -140,6 +151,7 @@ void loop()
         // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
           pixels.setPixelColor(i, pixels.Color(rgb[0], rgb[1], rgb[2])); // Moderately bright green color.
       }
+      
       
       pixels.show(); // This sends the updated pixel color to the hardware.
       // we've got a new set of colours.
